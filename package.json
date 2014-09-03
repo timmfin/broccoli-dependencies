@@ -1,0 +1,12 @@
+{
+  "name": "broccoli-require-directives",
+  "version": "0.0.1",
+  "dependencies": {
+    "lodash": "^2.4.1",
+    "coffee-script": "^1.8.0",
+    "rsvp": "^3.0.13",
+    "broccoli-filter": "^0.1.6",
+    "shellwords": "^0.1.0",
+    "walk-sync": "^0.1.2"
+  }
+}
