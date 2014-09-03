@@ -52,7 +52,7 @@ class DirectiveResolver
     @config = _.merge
       headerPattern: HEADER_PATTERN
       directivePattern: DIRECTIVE_PATTERN
-      log: true
+      log: false
     , @config
 
     if @config.log is true
@@ -69,7 +69,7 @@ class DirectiveResolver
     if (match = headerPattern.exec(content)) and match?.index is 0
       match[0]
 
-  getFiles: (targetFilePath) ->
+  getDependenciesFromDirectives: (targetFilePath) ->
     directivePattern = _.clone(@config.directivePattern)
     files = []
 
@@ -101,7 +101,7 @@ class DirectiveResolver
           continue
         else
           # Get new dependencies
-          while dependencies = @getFiles(depPath)
+          while dependencies = @getDependenciesFromDirectives(depPath)
             files = files.concat(dependencies)
 
     # Add file itself
@@ -157,7 +157,6 @@ class DirectiveResolver
     # and then join with dir to create absolute paths
     fs.readdirSync(dirPath).filter (p) ->
       ext = path.extname(p).slice(1)
-      console.log ' d ', p, ext, ext isnt '' and ext in validExtensions
       ext isnt '' and ext in validExtensions
     .map (p) ->
       path.join dirPath, p
@@ -183,6 +182,10 @@ class DirectiveResolver
   _process_require_lang_directory_directive: (parentPath, requiredPath) ->
     requiredPath = @_prepare_require_lang_path parentPath, requiredPath, 'require_lang_directory'
     @_process_require_directory_directive.call this, parentPath, requiredPath
+
+  _process_locales_to_render_directive: (parentPath, requiredLocales...) ->
+    # TODO
+    []
 
 
 
@@ -212,7 +215,7 @@ class DirectiveResolver
 
       if extensionsToCheck?.length > 0
         originalExtension = @_extractExtension inputPath
-        inputPathText = "#{inputPath.replace(new RegExp('.' + originalExtension + '$'), '')}.#{extensionsToCheck.join('|')}"
+        inputPathText = "#{inputPath.replace(new RegExp('\\.' + originalExtension + '$'), '')}.#{extensionsToCheck.join('|')}"
 
       throw new Error "Could not find #{inputPathText} among: #{dirsToCheck}"
     else
@@ -271,6 +274,8 @@ class DirectiveResolver
       [extension]
 
 
+# So extenions can be required
+DirectiveResolver.REQUIREABLE_EXTENSIONS = REQUIREABLE_EXTENSIONS
 
 
 # GHETTO TEST
@@ -281,16 +286,16 @@ class DirectiveResolver
 #   ]
 
 # testfile = '/Users/timmfin/dev/src/style_guide/static/js/style_guide_plus_layout.js'
-# console.log "\n#{testfile}:\n#{dr.getFiles(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
 
 # testfile = '/Users/timmfin/dev/src/style_guide/static/js/style_guide.js'
-# console.log "\n#{testfile}:\n#{dr.getFiles(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
 
 # testfile = '/Users/timmfin/dev/src/style_guide/static/sass/style_guide.sass'
-# console.log "\n#{testfile}:\n#{dr.getFiles(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
 
 # testfile = "/Users/timmfin/dev/src/static-repo-utils/repo-store/cta/CtaUI/static/sass/app.sass"
-# console.log "\n#{testfile}:\n#{dr.getFiles(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
 
 
 module.exports = DirectiveResolver
