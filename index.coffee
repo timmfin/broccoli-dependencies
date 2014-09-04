@@ -27,11 +27,17 @@ class CopyDirectiveDependenciesFilter extends Filter
   processFile: (srcDir, destDir, relativePath) ->
     return Promise.resolve(@processDependenciesToCopy(relativePath, srcDir, destDir))
       .then (dependenciesOutput) =>
-        { allDependencyPaths, dependenciesToCopy } = dependenciesOutput
+        { allDependencyPaths, dependenciesToCopy, depTree } = dependenciesOutput
 
         # Copy the source file, no need to modify
         outputPath = @getDestFilePath(relativePath)
         helpers.copyPreserveSync(srcDir + '/' + relativePath, destDir + '/' + outputPath)
+
+        stripLoadPathDirs = (p) =>
+          stripBaseDirectory p, @options.loadPaths
+
+        stripSrcAndLoadPathDirs = (p) =>
+          stripBaseDirectory p, [srcDir].concat(@options.loadPaths)
 
         # If this file had `require` dependencies, then copy them into our Broccoli
         # output because we will need to compile them (and copy the compiled output) later
@@ -42,7 +48,7 @@ class CopyDirectiveDependenciesFilter extends Filter
 
           # Copy all the files needed, and create an array of all their relative paths (for later usage)
           relativeCopiedPaths = for depPath in dependenciesToCopy
-            relativeDepPath = stripBaseDirectory depPath, @options.loadPaths
+            relativeDepPath = stripLoadPathDirs depPath
             copyDestination = destDir + '/' + relativeDepPath
 
             # console.log "copying: #{depPath}  ->  #{copyDestination}"
@@ -51,21 +57,21 @@ class CopyDirectiveDependenciesFilter extends Filter
 
             relativeDepPath
 
-          # Also, write out a text file which contains a list of all of the dependencies
-          # for later usage. Needed because Coffeescript/Sass strip out comments
+          # Also, write out a text file and HTML file which contains a list of all of the
+          # dependencies for later usage. Needed because Coffeescript/Sass strip out comments
           # and so that we can do `?hsDebug=true`-style expanded output for bundles
-          allDependenciesAsRelativePaths = for depPath in allDependencyPaths
-            stripBaseDirectory depPath, [srcDir].concat(@options.loadPaths)
-
-          dependenciesListContent = allDependenciesAsRelativePaths.join '\n'
-
           dependenciesListPath = "#{relativePath}.required-dependencies.txt"
-          console.log "writing: #{destDir + '/' + dependenciesListPath}"
+          dependenciesListContent = depTree.listOfAllRequiredDependencies(stripSrcAndLoadPathDirs).join '\n'
+
+          dependenciesHTMLPath = "#{relativePath}.required-dependencies.html"
+          dependenciesHTMLContent = depTree.allRequiredDependenciesAsHTML(stripSrcAndLoadPathDirs)
+
           fs.writeFileSync(destDir + '/' + dependenciesListPath, dependenciesListContent, { encoding: 'utf8' })
+          fs.writeFileSync(destDir + '/' + dependenciesHTMLPath, dependenciesHTMLContent, { encoding: 'utf8' })
 
           # Let broccoli-filter know to cache all of these files
           outputfilesToCache = [outputPath].concat(relativeCopiedPaths)
-          outputfilesToCache.push dependenciesListPath
+                                           .concat([dependenciesListPath, dependenciesHTMLPath])
 
           cacheInfo =
             outputFiles: outputfilesToCache
@@ -78,7 +84,8 @@ class CopyDirectiveDependenciesFilter extends Filter
       loadPaths: [srcDir].concat(@options.loadPaths)
       log: true
 
-    { allDependencyPaths } = directiveResolver.getDependenciesFromDirectives(currentPath)
+    depTree = directiveResolver.getDependencyTreeFromDirectives(currentPath)
+    allDependencyPaths = depTree.allValues()
 
     # Exclude paths that already exist in the srcDir or already have been copied
     dependenciesToCopy = allDependencyPaths.filter (p) =>
@@ -88,12 +95,11 @@ class CopyDirectiveDependenciesFilter extends Filter
       else
         false
 
-    # console.log("dependenciesToCopy", dependenciesToCopy) if dependenciesToCopy.length
-
     # Return all dependencies of this file _and_ only the files that we needed to copy
     {
       allDependencyPaths
       dependenciesToCopy
+      depTree
     }
 
 

@@ -5,8 +5,10 @@ path = require('path')
 _ = require('lodash')
 shellwords = require("shellwords")
 walkSync = require('walk-sync')
+util = require('util')
 
-{ stripBaseDirectory } = require('./utils')
+{ stripBaseDirectory, extractExtension } = require('./utils')
+{ createTree } = require('./tree')
 
 HEADER_PATTERN = ///
   ^ (
@@ -70,13 +72,9 @@ class DirectiveResolver
     if (match = headerPattern.exec(content)) and match?.index is 0
       match[0]
 
-  getDependenciesFromDirectives: (targetFilePath, depth = 0) ->
-    indent = ('  ' for x in [0...depth]).join('')
-    console.log '' if depth is 0
-    # console.log "#{indent}getDependenciesFromDirectives(#{stripBaseDirectory(targetFilePath, @config.loadPaths)})"
-
-    directivePattern = _.clone(@config.directivePattern)
-    files = []
+  getDependencyTreeFromDirectives: (targetFilePath, depth = 0) ->
+    directivePattern = _.clone(@config.directivePattern) # clone regex for safety
+    tree = createTree targetFilePath
 
     # Skip if already added to dependencies
     if _.indexOf(@fileCache, targetFilePath) isnt -1
@@ -85,12 +83,11 @@ class DirectiveResolver
       @fileCache.push(targetFilePath)
 
     content = fs.readFileSync targetFilePath, 'utf8'
+
+    # Extract out all the diretives from the header (directives can only appear
+    # at the top of the file)
     header = @extractHeader content
     directivePaths = []
-    filesPlusSourceComments = ["# From #{targetFilePath}"]
-
-    # if header
-    #   console.log "\nheader for #{targetFilePath}", header.trim(), "\n\n"
 
     while match = directivePattern.exec(header)
       [__, directive, directiveArgs] = match
@@ -103,53 +100,16 @@ class DirectiveResolver
       else
         throw new Error "Unknown directive #{directive} found in #{targetFilePath}"
 
-    # if directivePaths.length
-      # console.log "#{indent}next directivePaths:\n#{indent}  #{directivePaths.map((d) => stripBaseDirectory(d,  @config.loadPaths)).join('\n' + indent + '  ')}\n"
-
-      # filesPlusSourceComments.push
-      #   source: targetFilePath
-      #   dependencies: directivePaths
-
+    # For each path from the directives, recurse to get all of its dependencies
+    # (unless that path had already been included).
     for directivePath in directivePaths
-      # Skip if already added to dependencies
       if _.indexOf(@fileCache, directivePath) isnt -1
-        console.log "#{indent} -- #{stripBaseDirectory(directivePath, @config.loadPaths)} already included"
         continue
       else
+        depTree = @getDependencyTreeFromDirectives(directivePath, depth + 1)
+        tree.pushChildNode depTree
 
-        # Get recursive dependencies
-        { allDependencyPaths: dependencies, topLevelDedendencyPaths: topDeps } = @getDependenciesFromDirectives(directivePath, depth + 1)
-
-        files = files.concat(dependencies)
-
-        if topDeps.length > 0
-          filesPlusSourceComments.push ""
-          filesPlusSourceComments.push "# From #{directivePath}"
-          filesPlusSourceComments = filesPlusSourceComments.concat topDeps
-
-        filesPlusSourceComments.push directivePath
-
-
-
-    # Add file itself
-    files.push(targetFilePath)
-
-    filesPlusSourceComments.push('')
-    filesPlusSourceComments.push(targetFilePath)
-
-    if files.length > 1
-      @log "\n\nTree for #{stripBaseDirectory(targetFilePath, @config.loadPaths)}"
-      @log "  #{filesPlusSourceComments.join('\n  ')}"
-      # @log "\n\nDeps for #{stripBaseDirectory(targetFilePath, @config.loadPaths)}"
-      # @log "  #{(source + ':\n    ' + dependencies.map((d) => stripBaseDirectory(d,  @config.loadPaths)).join('\n    ') for { source, dependencies } in filesPlusSourceComments).join('\n  ')}"
-
-    # if targetFilePath is '/Users/timmfin/.hubspot/static-archive/common_assets/static-2.109/js/core/index.js'
-    #   throw new Error "FOR DEBBUGING"
-
-    return {
-      allDependencyPaths: files
-      topLevelDedendencyPaths: directivePaths
-    }
+    return tree
 
   _process_require_directive: (parentPath, requiredPath, rest...) ->
     new Error("The require directive can only take one argument") if rest?.length > 0
@@ -252,7 +212,7 @@ class DirectiveResolver
       inputPathText = "#{inputPath}"
 
       if extensionsToCheck?.length > 0
-        originalExtension = @_extractExtension inputPath
+        originalExtension = extractExtension inputPath
         inputPathText = "#{inputPath.replace(new RegExp('\\.' + originalExtension + '$'), '')}.#{extensionsToCheck.join('|')}"
 
       throw new Error "Could not find #{inputPathText} among: #{dirsToCheck}"
@@ -266,7 +226,7 @@ class DirectiveResolver
     if not dirsToCheck? or dirsToCheck.length is 0
       throw new Error "Could not lookup #{partialPath} no search directories to check."
 
-    originalExtension = @_extractExtension(partialPath)
+    originalExtension = extractExtension(partialPath, { onlyAllow: REQUIREABLE_EXTENSIONS })
 
     if originalExtension is ''
       replaceExtensionRegex = /$/
@@ -286,28 +246,22 @@ class DirectiveResolver
         if fs.existsSync(pathToCheck)
           return pathToCheck
 
-
-  _extractExtension: (inputPath) ->
-    extension = path.extname(inputPath).slice(1)
-    extension = '' unless extension in REQUIREABLE_EXTENSIONS
-    extension
-
   _extractLanguageFromPath: (inputPath) ->
     # TODO, make less ghetto (don't assume `<locale>.lyaml`)
     path.basename(inputPath, ".lyaml")
 
   _extensionsToCheck: (inputPath, options = {}) ->
-    extension = @_extractExtension(inputPath)
+    extension = extractExtension(inputPath, { onlyAllow: REQUIREABLE_EXTENSIONS })
 
     # If there was no valid extension on the passed path, get the extension from the
     # parent path (the file where the passed path came from)
     if extension is '' and options.filename?
-      extension = @_extractExtension(options.filename)
+      extension = extractExtension(options.filename, { onlyAllow: REQUIREABLE_EXTENSIONS })
 
     if extension in ['sass', 'scss', 'css'] and not options.excludePreprocessorExtensions
       ['sass', 'scss', 'css']
     else if extension in ['coffee', 'js', 'lyaml'] and not options.excludePreprocessorExtensions
-      ['coffee', 'js', 'jade', 'lyaml']
+      ['coffee', 'js', 'jade', 'lyaml', 'handlebars']
     else
       [extension]
 
@@ -324,16 +278,16 @@ DirectiveResolver.REQUIREABLE_EXTENSIONS = REQUIREABLE_EXTENSIONS
 #   ]
 
 # testfile = '/Users/timmfin/dev/src/style_guide/static/js/style_guide_plus_layout.js'
-# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependencyTreeFromDirectives(testfile)}"
 
 # testfile = '/Users/timmfin/dev/src/style_guide/static/js/style_guide.js'
-# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependencyTreeFromDirectives(testfile)}"
 
 # testfile = '/Users/timmfin/dev/src/style_guide/static/sass/style_guide.sass'
-# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependencyTreeFromDirectives(testfile)}"
 
 # testfile = "/Users/timmfin/dev/src/static-repo-utils/repo-store/cta/CtaUI/static/sass/app.sass"
-# console.log "\n#{testfile}:\n#{dr.getDependenciesFromDirectives(testfile)}"
+# console.log "\n#{testfile}:\n#{dr.getDependencyTreeFromDirectives(testfile)}"
 
 
 module.exports = DirectiveResolver
