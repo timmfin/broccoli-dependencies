@@ -6,6 +6,7 @@ fs = require('fs')
 helpers = require('broccoli-kitchen-sink-helpers')
 mkdirp = require('mkdirp')
 
+{ stripBaseDirectory } = require('./utils')
 Filter = require('broccoli-filter')
 DirectiveResolver = require('./directive-resolver')
 
@@ -25,25 +26,49 @@ class CopyDirectiveDependenciesFilter extends Filter
 
   processFile: (srcDir, destDir, relativePath) ->
     return Promise.resolve(@processDependenciesToCopy(relativePath, srcDir, destDir))
-      .then (dependenciesToCopy) =>
+      .then (dependenciesOutput) =>
+        { allDependencyPaths, dependenciesToCopy } = dependenciesOutput
 
         # Copy the source file, no need to modify
         outputPath = @getDestFilePath(relativePath)
         helpers.copyPreserveSync(srcDir + '/' + relativePath, destDir + '/' + outputPath)
 
-        if dependenciesToCopy.length > 0
+        # If this file had `require` dependencies, then copy them into our Broccoli
+        # output because we will need to compile them (and copy the compiled output) later
+        #
+        # Note `... > 1` and not `... > 0` because the file itself is always included
+        # as a dependenency
+        if allDependencyPaths.length > 1
+
+          # Copy all the files needed, and create an array of all their relative paths (for later usage)
           relativeCopiedPaths = for depPath in dependenciesToCopy
-            relativeDepPath = @stripLoadPath depPath
+            relativeDepPath = stripBaseDirectory depPath, @options.loadPaths
             copyDestination = destDir + '/' + relativeDepPath
 
-            # console.log "copy to: #{destDir + '/' + relativeDepPath}"
+            # console.log "copying: #{depPath}  ->  #{copyDestination}"
             mkdirp.sync(path.dirname(copyDestination))
             helpers.copyPreserveSync(depPath, copyDestination)
 
             relativeDepPath
 
+          # Also, write out a text file which contains a list of all of the dependencies
+          # for later usage. Needed because Coffeescript/Sass strip out comments
+          # and so that we can do `?hsDebug=true`-style expanded output for bundles
+          allDependenciesAsRelativePaths = for depPath in allDependencyPaths
+            stripBaseDirectory depPath, [srcDir].concat(@options.loadPaths)
+
+          dependenciesListContent = allDependenciesAsRelativePaths.join '\n'
+
+          dependenciesListPath = "#{relativePath}.required-dependencies.txt"
+          console.log "writing: #{destDir + '/' + dependenciesListPath}"
+          fs.writeFileSync(destDir + '/' + dependenciesListPath, dependenciesListContent, { encoding: 'utf8' })
+
+          # Let broccoli-filter know to cache all of these files
+          outputfilesToCache = [outputPath].concat(relativeCopiedPaths)
+          outputfilesToCache.push dependenciesListPath
+
           cacheInfo =
-            outputFiles: [@getDestFilePath(relativePath)].concat(relativeCopiedPaths)
+            outputFiles: outputfilesToCache
 
 
   processDependenciesToCopy: (relativePath, srcDir) ->
@@ -51,26 +76,26 @@ class CopyDirectiveDependenciesFilter extends Filter
 
     directiveResolver = new DirectiveResolver
       loadPaths: [srcDir].concat(@options.loadPaths)
+      log: true
 
-    dependencyPaths = directiveResolver.getDependenciesFromDirectives(currentPath)
+    { allDependencyPaths } = directiveResolver.getDependenciesFromDirectives(currentPath)
 
     # Exclude paths that already exist in the srcDir or already have been copied
-    pathsToCopy = dependencyPaths.filter (p) =>
+    dependenciesToCopy = allDependencyPaths.filter (p) =>
       if p.indexOf(srcDir) isnt 0 and not @copiedDependencies[p]
         @copiedDependencies[p] = true
         true
       else
         false
 
-    # console.log("pathsToCopy", pathsToCopy) if pathsToCopy.length
-    pathsToCopy
+    # console.log("dependenciesToCopy", dependenciesToCopy) if dependenciesToCopy.length
 
-  stripLoadPath: (depPath) ->
-    for loadPath in @options.loadPaths
-      if depPath.indexOf(loadPath) is 0
-        return depPath.replace loadPath, ''
+    # Return all dependencies of this file _and_ only the files that we needed to copy
+    {
+      allDependencyPaths
+      dependenciesToCopy
+    }
 
-    throw new Error "#{depPath} isn't in any of #{@options.loadPaths.join(', ')}"
 
 
 

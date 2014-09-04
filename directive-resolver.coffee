@@ -6,6 +6,7 @@ _ = require('lodash')
 shellwords = require("shellwords")
 walkSync = require('walk-sync')
 
+{ stripBaseDirectory } = require('./utils')
 
 HEADER_PATTERN = ///
   ^ (
@@ -69,7 +70,11 @@ class DirectiveResolver
     if (match = headerPattern.exec(content)) and match?.index is 0
       match[0]
 
-  getDependenciesFromDirectives: (targetFilePath) ->
+  getDependenciesFromDirectives: (targetFilePath, depth = 0) ->
+    indent = ('  ' for x in [0...depth]).join('')
+    console.log '' if depth is 0
+    # console.log "#{indent}getDependenciesFromDirectives(#{stripBaseDirectory(targetFilePath, @config.loadPaths)})"
+
     directivePattern = _.clone(@config.directivePattern)
     files = []
 
@@ -81,37 +86,70 @@ class DirectiveResolver
 
     content = fs.readFileSync targetFilePath, 'utf8'
     header = @extractHeader content
+    directivePaths = []
+    filesPlusSourceComments = ["# From #{targetFilePath}"]
+
+    # if header
+    #   console.log "\nheader for #{targetFilePath}", header.trim(), "\n\n"
 
     while match = directivePattern.exec(header)
-      # console.log "match", match
-
       [__, directive, directiveArgs] = match
       directiveArgs = shellwords.split directiveArgs
 
       directiveFunc = "_process_#{directive}_directive"
 
       if @[directiveFunc]?
-        dependencyPaths = @[directiveFunc] targetFilePath, directiveArgs...
+        directivePaths = directivePaths.concat @[directiveFunc](targetFilePath, directiveArgs...)
       else
         throw new Error "Unknown directive #{directive} found in #{targetFilePath}"
 
-      for depPath in dependencyPaths
-        # Skip if already added to dependencies
-        if _.indexOf(@fileCache, depPath) isnt -1
-          continue
-        else
-          # Get new dependencies
-          while dependencies = @getDependenciesFromDirectives(depPath)
-            files = files.concat(dependencies)
+    # if directivePaths.length
+      # console.log "#{indent}next directivePaths:\n#{indent}  #{directivePaths.map((d) => stripBaseDirectory(d,  @config.loadPaths)).join('\n' + indent + '  ')}\n"
+
+      # filesPlusSourceComments.push
+      #   source: targetFilePath
+      #   dependencies: directivePaths
+
+    for directivePath in directivePaths
+      # Skip if already added to dependencies
+      if _.indexOf(@fileCache, directivePath) isnt -1
+        console.log "#{indent} -- #{stripBaseDirectory(directivePath, @config.loadPaths)} already included"
+        continue
+      else
+
+        # Get recursive dependencies
+        { allDependencyPaths: dependencies, topLevelDedendencyPaths: topDeps } = @getDependenciesFromDirectives(directivePath, depth + 1)
+
+        files = files.concat(dependencies)
+
+        if topDeps.length > 0
+          filesPlusSourceComments.push ""
+          filesPlusSourceComments.push "# From #{directivePath}"
+          filesPlusSourceComments = filesPlusSourceComments.concat topDeps
+
+        filesPlusSourceComments.push directivePath
+
+
 
     # Add file itself
     files.push(targetFilePath)
 
-    if files.length > 1
-      @log "\n\nDeps for #{targetFilePath}"
-      @log "  #{files.join('\n  ')}"
+    filesPlusSourceComments.push('')
+    filesPlusSourceComments.push(targetFilePath)
 
-    return files
+    if files.length > 1
+      @log "\n\nTree for #{stripBaseDirectory(targetFilePath, @config.loadPaths)}"
+      @log "  #{filesPlusSourceComments.join('\n  ')}"
+      # @log "\n\nDeps for #{stripBaseDirectory(targetFilePath, @config.loadPaths)}"
+      # @log "  #{(source + ':\n    ' + dependencies.map((d) => stripBaseDirectory(d,  @config.loadPaths)).join('\n    ') for { source, dependencies } in filesPlusSourceComments).join('\n  ')}"
+
+    # if targetFilePath is '/Users/timmfin/.hubspot/static-archive/common_assets/static-2.109/js/core/index.js'
+    #   throw new Error "FOR DEBBUGING"
+
+    return {
+      allDependencyPaths: files
+      topLevelDedendencyPaths: directivePaths
+    }
 
   _process_require_directive: (parentPath, requiredPath, rest...) ->
     new Error("The require directive can only take one argument") if rest?.length > 0
