@@ -2,14 +2,35 @@
 
 class Node
   constructor: (@value, options = {}) ->
-    { @children } = options
+    { @children, @parent } = options
     @children ?= []
 
-  pushChildValue: (childValue) ->
-    @children.push new RequireTreeNode(childValue)
+  pushChildValue: (childValues...) ->
+    for childValue in childValues
+      @children.push new RequireTreeNode(childValue),
+        parent: this
 
-  pushChildNode: (childNode) ->
-    @children.push childNode
+  pushChildNode: (childNodes...) ->
+    for childNode in childNodes
+      childNode.parent = this
+      @children.push childNode
+
+  # Push aliases (since plural and singular are same impl)
+  Node::pushChildValues = Node::pushChildValue
+  Node::pushChildNodes = Node::pushChildNode
+
+  isRoot: ->
+    not @parent?
+
+  size: ->
+    count = 0
+
+    @traverse (node, visitChildren) ->
+      count++
+      visitChildren()
+
+    count
+
 
   # Traverse the tree starting with this node. Example:
   #
@@ -79,9 +100,13 @@ class RequireTreeNode extends Node
 
   listOfAllRequiredDependencies: (formatValue) ->
     formatValue ?= (v) -> v
+    deps = []
 
-    @allValues().map (depPath) =>
-      formatValue depPath
+    @traverse (node, visitChildren) ->
+      visitChildren()
+      deps.push formatValue(convertFromPrepressorExtension(node.value, node.parent?.value))
+
+    deps
 
   allRequiredDependenciesAsHTML: (formatValue) ->
     formatValue ?= (v) -> v
@@ -100,7 +125,10 @@ class RequireTreeNode extends Node
     dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
 
   preIncludeComment: (node, formattedValue) ->
-    "\n<!-- From #{formattedValue} -->"
+    extra = ''
+    extra = "(total files: #{node.size()})" if node.isRoot()
+
+    "\n<!-- From #{formattedValue} #{extra} -->"
 
   postIncludeComment: (node, formattedValue) ->
     "<!-- End #{formattedValue} -->\n"
@@ -130,17 +158,13 @@ module.exports = RequireTreeNode
 # test = ->
 #   util = require('util')
 
-#   nodesFromArray = (arr) ->
-#     arr.map (val) ->
-#       new RequireTreeNode val
-
 #   root = new RequireTreeNode 'root'
-#   root.children = nodesFromArray [1...5]
+#   root.pushChildValues [1...5]
 
-#   root.children[0].children = nodesFromArray [6]
-#   root.children[2].children = nodesFromArray [7...10]
-#   root.children[2].children[1].children = nodesFromArray [11...13]
-#   root.children[3].children = nodesFromArray [14...15]
+#   root.children[0].pushChildValues [6]
+#   root.children[2].pushChildValues [7...10]
+#   root.children[2].children[1].pushChildValues [11...13]
+#   root.children[3].pushChildValues [14...15]
 
 #   console.log "root"
 #   console.log util.inspect root, { depth: 10 }
