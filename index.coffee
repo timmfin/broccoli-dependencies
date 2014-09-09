@@ -1,14 +1,15 @@
 'use strict'
 
-Promise = require('rsvp').Promise
-path = require('path')
-fs = require('fs')
+RSVP    = require('rsvp')
+path    = require('path')
+fs      = require('fs')
 helpers = require('broccoli-kitchen-sink-helpers')
-mkdirp = require('mkdirp')
+mkdirp  = require('mkdirp')
+async   = require('async')
 
-{ stripBaseDirectory } = require('./utils')
-Filter = require('broccoli-filter')
-DirectiveResolver = require('./directive-resolver')
+{ stripBaseDirectory, convertFromPrepressorExtension } = require('./utils')
+Filter                 = require('broccoli-filter')
+DirectiveResolver      = require('./directive-resolver')
 
 
 class CopyDirectiveDependenciesFilter extends Filter
@@ -55,39 +56,25 @@ class CopyDirectiveDependenciesFilter extends Filter
 
         relativeDepPath
 
-      # Also, write out a text file and HTML file which contains a list of all of the
-      # dependencies for later usage. Needed because Coffeescript/Sass strip out comments
-      # and so that we can do `?hsDebug=true`-style expanded output for bundles
-      # outputPath = convertFromPrepressorExtension relativePath
-      dependenciesListPath = "#{outputPath}.required-dependencies.txt"
-      dependenciesListContent = depTree.listOfAllRequiredDependencies(stripSrcAndLoadPathDirs).join '\n'
-
-      dependenciesHTMLPath = "#{outputPath}.required-dependencies.html"
-      dependenciesHTMLContent = depTree.allRequiredDependenciesAsHTML(stripSrcAndLoadPathDirs)
-
-      fs.writeFileSync(destDir + '/' + dependenciesListPath, dependenciesListContent, { encoding: 'utf8' })
-      fs.writeFileSync(destDir + '/' + dependenciesHTMLPath, dependenciesHTMLContent, { encoding: 'utf8' })
-
       # Let broccoli-filter know to cache all of these files
       outputfilesToCache = [outputPath].concat(relativeCopiedPaths)
-                                       # .concat([dependenciesListPath, dependenciesHTMLPath])
 
       cacheInfo =
         outputFiles: outputfilesToCache
 
 
   processDependenciesToCopy: (relativePath, srcDir) ->
-    currentPath = path.join srcDir, relativePath
-
     directiveResolver = new DirectiveResolver
       loadPaths: [srcDir].concat(@options.loadPaths)
-      log: true
+      cache: @options.cache
 
-    depTree = directiveResolver.getDependencyTreeFromDirectives(currentPath)
-    allDependencyPaths = depTree.allValues()
+    depTree = directiveResolver.getDependencyTreeFromDirectives(relativePath, srcDir)
+    allAbsoluteDependencyPaths = depTree.listOfAllOriginalAbsoluteDependencies()
+
+    depTree.debugPrint (v) -> v.relativePath
 
     # Exclude paths that already exist in the srcDir or already have been copied
-    dependenciesToCopy = allDependencyPaths.filter (p) =>
+    dependenciesToCopy = allAbsoluteDependencyPaths.filter (p) =>
       if p.indexOf(srcDir) isnt 0 and not @copiedDependencies[p]
         @copiedDependencies[p] = true
         true
@@ -96,7 +83,6 @@ class CopyDirectiveDependenciesFilter extends Filter
 
     # Return all dependencies of this file _and_ only the files that we needed to copy
     {
-      allDependencyPaths
       dependenciesToCopy
       depTree
     }
@@ -106,9 +92,7 @@ class CopyDirectiveDependenciesFilter extends Filter
 
 class InsertDirectiveContentsFilter extends Filter
 
-  # Only operate on all of the `*.required-dependencies.txt` files that were
-  # laid down by CopyDirectiveDependenciesFilter
-  extensions: ['required-dependencies.txt']
+  extensions: DirectiveResolver.REQUIREABLE_EXTENSIONS
 
   constructor: (inputTree, options = {}) ->
     if not (this instanceof InsertDirectiveContentsFilter)
@@ -117,36 +101,37 @@ class InsertDirectiveContentsFilter extends Filter
     @inputTree = inputTree
     @options = options
 
+    throw new Error "No cache instance passed in InsertDirectiveContentsFilter's options, that is expected (for now?)" unless @options.cache?
+
   # Take all the dependencies laid down in `*.required-dependencies.txt` and insert
   # the content of each into the top of the file. Eg. the concatenation step, but done
   # after any other precompilers.
   processFile: (srcDir, destDir, relativePath) ->
     console.log "processing", relativePath
-    origFilepath = relativePath.replace '.required-dependencies.txt', ''
-    fileContents = origFileContents = fs.readFileSync(srcDir + '/' + origFilepath, { encoding: 'utf8' })
+    fileContents = origFileContents = fs.readFileSync(srcDir + '/' + relativePath, { encoding: 'utf8' })
 
-    listOfDependencies = fs.readFileSync(srcDir + '/' + relativePath, { encoding: 'utf8' }).split('\n')
-    listOfDependencies.pop()  # remove the self dependency
-    console.log "listOfDependencies", listOfDependencies
-
+    # Since we (should be) passing in a cache used during CopyDirectiveDependenciesFilter,
+    # the `getDependencyTreeFromDirectives(...)` is a no-op that just returns an
+    # existing tree in the cache
     directiveResolver = new DirectiveResolver
       loadPaths: [srcDir].concat(@options.loadPaths)
       cache: @options.cache
 
-    header = directiveResolver.extractHeader(fileContents)
+    depTree = directiveResolver.getDependencyTreeFromDirectives(relativePath, srcDir)
+    allRelativeDependencyPaths = depTree.listOfAllFinalizedRequiredDependencies()
+    allRelativeDependencyPaths.pop()  # remove the self dependency
 
-    # console.log "\nfileContents", fileContents
-    # console.log "\nheader", require('util').inspect(header)
-    # console.log "\nfileContents.indexOf(header)", fileContents.indexOf(header)
+    console.log "allRelativeDependencyPaths", allRelativeDependencyPaths
 
     # Remove the directive header if it still exists (might be a bit better if
     # only the directive lines in the header were removed)
-    fileContents = fileContents.slice header.length if fileContents.indexOf(header) is 0
+    header = directiveResolver.extractHeader(fileContents)
+    fileContents = fileContents.slice(header.length) if fileContents.indexOf(header) is 0
     # console.log "\nfileContents", fileContents
 
     deferred = RSVP.defer()
 
-    async.map listOfDependencies, (filepath, callback) ->
+    async.map allRelativeDependencyPaths, (filepath, callback) ->
       fs.readFile srcDir + '/' + filepath, { encoding: 'utf8' }, callback
     , (err, contentsOfAllDependencies) ->
       if err
@@ -158,18 +143,15 @@ class InsertDirectiveContentsFilter extends Filter
         # console.log "\nnewContents", newContents
 
         if newContents isnt origFileContents
-          console.log "writing #{destDir + '/' + origFilepath}"
-          fs.writeFile destDir + '/' + origFilepath, newContents, { encoding: 'utf8' }, (err) ->
+          console.log "writing #{destDir + '/' + relativePath}"
+          fs.writeFile destDir + '/' + relativePath, newContents, { encoding: 'utf8' }, (err) ->
             if err
               deferred.reject err
             else
-              deferred.resolve
-                inputFiles: [origFilepath, relativePath]
-                outputFiles: [origFilepath]
+              deferred.resolve()
         else
-          deferred.resolve
-            inputFiles: [origFilepath, relativePath]
-            outputFiles: []
+          helpers.copyPreserveSync srcDir + '/' + relativePath, destDir + '/' + relativePath
+          deferred.resolve()
 
     deferred.promise
 

@@ -96,15 +96,25 @@ createGetter = (klass, prop, get) ->
 
 
 class RequireTreeNode extends Node
-  createGetter @, 'filepath', -> @value
+  createGetter @::, 'relativePath', -> @value.relativePath
+  createGetter @::, 'originalAbsolutePath', -> @value.originalAbsolutePath
 
-  listOfAllRequiredDependencies: (formatValue) ->
+  listOfAllOriginalAbsoluteDependencies: ->
+    deps = []
+
+    @traverse (node, visitChildren) ->
+      visitChildren()
+      deps.push node.originalAbsolutePath
+
+    deps
+
+  listOfAllFinalizedRequiredDependencies: (formatValue) ->
     formatValue ?= (v) -> v
     deps = []
 
     @traverse (node, visitChildren) ->
       visitChildren()
-      deps.push formatValue(convertFromPrepressorExtension(node.value, node.parent?.value))
+      deps.push formatValue(convertFromPrepressorExtension(node.relativePath, node.parent?.relativePath))
 
     deps
 
@@ -113,7 +123,7 @@ class RequireTreeNode extends Node
     dependenciesHTMLContent = []
 
     @traverse (node, visitChildren) =>
-      val = formatValue(node.value)
+      val = formatValue(node.relativePath)
 
       dependenciesHTMLContent.push @preIncludeComment(node, val) if node.children.length > 0
 
@@ -134,7 +144,7 @@ class RequireTreeNode extends Node
     "<!-- End #{formattedValue} -->\n"
 
   htmlToIncludeDep: (node, formattedValue) ->
-    val = convertFromPrepressorExtension formattedValue, node.parent?.value
+    val = convertFromPrepressorExtension formattedValue, node.parent?.relativePath
     val = "/#{val}" unless val[0] is '/'
 
     ext = extractExtension val
