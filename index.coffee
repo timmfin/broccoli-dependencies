@@ -71,8 +71,6 @@ class CopyDirectiveDependenciesFilter extends Filter
     depTree = directiveResolver.getDependencyTreeFromDirectives(relativePath, srcDir)
     allAbsoluteDependencyPaths = depTree.listOfAllOriginalAbsoluteDependencies()
 
-    depTree.debugPrint (v) -> v.relativePath
-
     # Exclude paths that already exist in the srcDir or already have been copied
     dependenciesToCopy = allAbsoluteDependencyPaths.filter (p) =>
       if p.indexOf(srcDir) isnt 0 and not @copiedDependencies[p]

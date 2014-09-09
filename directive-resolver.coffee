@@ -127,8 +127,8 @@ class DirectiveResolver
 
     @sharedCache.storeDependencyTreeForFile relativePath, tree
 
-    if depth is 0 and tree.size() > 1
-      tree.debugPrint (v) -> v.relativePath
+    # if depth is 0 and tree.size() > 1
+    #   tree.debugPrint (v) -> v.relativePath
 
     return tree
 
@@ -138,6 +138,14 @@ class DirectiveResolver
     [resolvedDir, relativePath] = @resolveDirAndPath requiredPath,
       filename: parentPath
       loadPaths: @config.loadPaths
+      allowDirectory: true
+
+    # If the resolvedPath is a directory, look for an index.js|css file inside
+    # of that directory.
+    if fs.statSync(resolvedDir + '/' + relativePath).isDirectory()
+      [resolvedDir, relativePath] = @resolveDirAndPath 'index',
+        filename: parentPath
+        loadPaths: [path.join(resolvedDir, relativePath)]
 
     [
       new DirectiveResult resolvedDir, relativePath,
@@ -228,22 +236,21 @@ class DirectiveResolver
     throw new Error "Required filename option wasn't passed to resolvePath" unless options.filename?
 
     if options.onlyDirectory
-      extensionToCheck = ''
+      extensionsToCheck = ['']
     else
       extensionsToCheck = @_extensionsToCheck inputPath, options
+      extensionsToCheck.push('') if options.allowDirectory is true
 
-    # If a relative path, we _don't_ want to look inside all of the loadPaths dirs
-    # (since a relative path is always relative to the file it comes from).
-    #
-    # Also doing some mangle-ing to convert the directive's relative path into
-    # a path that is relative to the srcDir
+    dirsToCheck = options.loadPaths ? []
+
+    # Some mangle-ing to convert a relative directive path into a path that is
+    # relative to the srcDir (which should have been included in options.loadPaths)
     if /^\.|^\.\.|^\.\.\//.test inputPath
       absolutizedPath = path.join path.dirname(options.filename), inputPath
       [resolvedBaseDir, newRelativePath] = extractBaseDirectoryAndRelativePath absolutizedPath, @config.loadPaths
-      [resolvedDir, relativePath] = @_searchForPath newRelativePath, [resolvedBaseDir], extensionsToCheck
-    else
-      dirsToCheck = options.loadPaths ? []
-      [resolvedDir, relativePath] = @_searchForPath inputPath, dirsToCheck, extensionsToCheck
+      inputPath = newRelativePath
+
+    [resolvedDir, relativePath] = @_searchForPath inputPath, dirsToCheck, extensionsToCheck
 
     # Throw a useful error if no path is found. Otherwise return the first successful
     # path found by _searchForPath
