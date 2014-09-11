@@ -12,6 +12,13 @@ Filter                 = require('broccoli-filter')
 DirectiveResolver      = require('./directive-resolver')
 
 
+# Follows the dependency tree from Sprockets `//= require ...` directives, and
+# copies all of those dependencies into the broccoli "working dir" if they are not
+# already there.
+#
+# This is necessary to ensure that any `require`-ed files that need preprocessing
+# (like Sass or Coffeescript) are included before the rest of the build steps.
+
 class CopyDirectiveDependenciesFilter extends Filter
 
   extensions: DirectiveResolver.REQUIREABLE_EXTENSIONS
@@ -85,7 +92,27 @@ class CopyDirectiveDependenciesFilter extends Filter
     }
 
 
-
+# Mimic Sprocket-style `//= require ...` directives to concatenate JS/CSS via broccoli.
+#
+# You can pass in an existing `DirectiveDependenciesCache` instance if you already have
+# done a pass at calculating dependencies. For example:
+#
+#     sharedDirectiveDependencyCache = new DirectiveDependenciesCache
+#
+#     tree = CopyDirectiveDependenciesFilter tree,
+#       cache: sharedDirectiveDependencyCache
+#       loadPaths: externalLoadPaths
+#
+#     tree = compileSass tree,
+#       sassDir: '.'
+#       cssDir: '.'
+#       importPath: externalLoadPaths
+#
+#     tree = compileCoffeescript tree
+#
+#     tree = InsertDirectiveContentsFilter tree,
+#       cache: sharedDirectiveDependencyCache
+#       loadPaths: externalLoadPaths
 
 class InsertDirectiveContentsFilter extends Filter
 
