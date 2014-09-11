@@ -50,7 +50,6 @@ class CopyDirectiveDependenciesFilter extends Filter
         relativeDepPath = stripLoadPathDirs depPath
         copyDestination = destDir + '/' + relativeDepPath
 
-        # console.log "copying: #{depPath}  ->  #{copyDestination}"
         mkdirp.sync(path.dirname(copyDestination))
         helpers.copyPreserveSync(depPath, copyDestination)
 

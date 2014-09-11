@@ -141,7 +141,7 @@ class DirectiveResolver
       allowDirectory: true
 
     # If the resolvedPath is a directory, look for an index.js|css file inside
-    # of that directory.
+    # of that directory
     if fs.statSync(resolvedDir + '/' + relativePath).isDirectory()
       [resolvedDir, relativePath] = @resolveDirAndPath 'index',
         filename: parentPath
