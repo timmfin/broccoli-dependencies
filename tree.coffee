@@ -125,25 +125,25 @@ class RequireTreeNode extends Node
     @traverse (node, visitChildren) =>
       val = formatValue(node.relativePath)
 
-      dependenciesHTMLContent.push @preIncludeComment(node, val) if node.children.length > 0
+      dependenciesHTMLContent.push @_preIncludeComment(node, val) if node.children.length > 0
 
       visitChildren()
 
-      dependenciesHTMLContent.push @htmlToIncludeDep(node, val)
-      dependenciesHTMLContent.push @postIncludeComment(node, val) if node.children.length > 0
+      dependenciesHTMLContent.push @_htmlToIncludeDep(node, val)
+      dependenciesHTMLContent.push @_postIncludeComment(node, val) if node.children.length > 0
 
     dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
 
-  preIncludeComment: (node, formattedValue) ->
+  _preIncludeComment: (node, formattedValue) ->
     extra = ''
     extra = "(total files: #{node.size()})" if node.isRoot()
 
     "\n<!-- From #{formattedValue} #{extra} -->"
 
-  postIncludeComment: (node, formattedValue) ->
+  _postIncludeComment: (node, formattedValue) ->
     "<!-- End #{formattedValue} -->\n"
 
-  htmlToIncludeDep: (node, formattedValue) ->
+  _htmlToIncludeDep: (node, formattedValue) ->
     val = convertFromPrepressorExtension formattedValue, node.parent?.relativePath
     val = "/#{val}" unless val[0] is '/'
 
@@ -155,7 +155,6 @@ class RequireTreeNode extends Node
       """<link href="#{val}" rel="stylesheet" type="text/css" />"""
     else
       throw new Error "Can't create HTML element for unkown file type: #{formattedValue}"
-
 
 
 
