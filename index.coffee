@@ -50,7 +50,9 @@ class CopyDirectiveDependenciesFilter extends Filter
     #
     # Note `... > 1` and not `... > 0` because the file itself is always included
     # as a dependenency
-    if depTree.size() > 1
+    treeSize = depTree.size()
+    if treeSize > 1
+      console.log "Copying all missing directive dependencies from #{relativePath} (#{treeSize - 1} file#{if treeSize > 2 then 's' else ''})"
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
       relativeCopiedPaths = for depPath in dependenciesToCopy
@@ -127,11 +129,10 @@ class InsertDirectiveContentsFilter extends Filter
 
     throw new Error "No cache instance passed in InsertDirectiveContentsFilter's options, that is expected (for now?)" unless @options.cache?
 
-  # Take all the dependencies laid down in `*.required-dependencies.txt` and insert
+  # Take all the dependencies laid down in the `DirectiveDependenciesCache` and insert
   # the content of each into the top of the file. Eg. the concatenation step, but done
   # after any other precompilers.
   processFile: (srcDir, destDir, relativePath) ->
-    console.log "processing", relativePath
     fileContents = origFileContents = fs.readFileSync(srcDir + '/' + relativePath, { encoding: 'utf8' })
 
     # Since we (should be) passing in a cache used during CopyDirectiveDependenciesFilter,
@@ -145,39 +146,37 @@ class InsertDirectiveContentsFilter extends Filter
     allRelativeDependencyPaths = depTree.listOfAllFinalizedRequiredDependencies()
     allRelativeDependencyPaths.pop()  # remove the self dependency
 
-    console.log "allRelativeDependencyPaths", allRelativeDependencyPaths
+    if allRelativeDependencyPaths.length is 0
+      helpers.copyPreserveSync srcDir + '/' + relativePath, destDir + '/' + relativePath
+    else
+      # Remove the directive header if it still exists (might be a bit better if
+      # only the directive lines in the header were removed)
+      header = directiveResolver.extractHeader(fileContents)
+      fileContents = fileContents.slice(header.length) if fileContents.indexOf(header) is 0
+      # console.log "\nfileContents", fileContents
 
-    # Remove the directive header if it still exists (might be a bit better if
-    # only the directive lines in the header were removed)
-    header = directiveResolver.extractHeader(fileContents)
-    fileContents = fileContents.slice(header.length) if fileContents.indexOf(header) is 0
-    # console.log "\nfileContents", fileContents
+      deferred = RSVP.defer()
 
-    deferred = RSVP.defer()
-
-    async.map allRelativeDependencyPaths, (filepath, callback) ->
-      fs.readFile srcDir + '/' + filepath, { encoding: 'utf8' }, callback
-    , (err, contentsOfAllDependencies) ->
-      if err
-        deferred.reject err
-      else
-        newContents = contentsOfAllDependencies.join('\n') + fileContents
-        console.log "contentsOfAllDependencies length", contentsOfAllDependencies.join('\n').length
-        console.log "newContents.length", newContents.length
-        # console.log "\nnewContents", newContents
-
-        if newContents isnt origFileContents
-          console.log "writing #{destDir + '/' + relativePath}"
-          fs.writeFile destDir + '/' + relativePath, newContents, { encoding: 'utf8' }, (err) ->
-            if err
-              deferred.reject err
-            else
-              deferred.resolve()
+      async.map allRelativeDependencyPaths, (filepath, callback) ->
+        fs.readFile srcDir + '/' + filepath, { encoding: 'utf8' }, callback
+      , (err, contentsOfAllDependencies) ->
+        if err
+          deferred.reject err
         else
-          helpers.copyPreserveSync srcDir + '/' + relativePath, destDir + '/' + relativePath
-          deferred.resolve()
+          newContents = contentsOfAllDependencies.join('\n') + fileContents
 
-    deferred.promise
+          if newContents isnt origFileContents
+            console.log "Concatenating directive deps into #{relativePath}"
+            fs.writeFile destDir + '/' + relativePath, newContents, { encoding: 'utf8' }, (err) ->
+              if err
+                deferred.reject err
+              else
+                deferred.resolve()
+          else
+            helpers.copyPreserveSync srcDir + '/' + relativePath, destDir + '/' + relativePath
+            deferred.resolve()
+
+      deferred.promise
 
 
 

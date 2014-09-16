@@ -7,7 +7,7 @@ shellwords = require("shellwords")
 walkSync = require('walk-sync')
 util = require('util')
 
-{ stripBaseDirectory, extractExtension, extractBaseDirectoryAndRelativePath } = require('./utils')
+{ stripBaseDirectory, extractExtension, extractBaseDirectoryAndRelativePath, convertFromPrepressorExtension } = require('./utils')
 { createTree } = require('./tree')
 DirectiveResult = require('./directive-result')
 DirectiveDependenciesCache = require('./dependencies-cache')
@@ -75,12 +75,12 @@ class DirectiveResolver
     if (match = headerPattern.exec(content)) and match?.index is 0
       match[0]
 
-  getDependencyTreeFromDirectives: (relativePath, srcDir, tmpFileCache = [], depth = 0) ->
+  getDependencyTreeFromDirectives: (relativePath, srcDir, fromRelativePath = null, tmpFileCache = [], depth = 0) ->
     targetFilePath = srcDir + '/' + relativePath
 
     # Skip any parsing/caclulation if this tree has already been calculated
-    if @sharedCache.hasFile targetFilePath
-      return @sharedCache.dependencyTreeForFile targetFilePath
+    if @sharedCache.hasFile relativePath
+      return @sharedCache.dependencyTreeForFile relativePath
 
     # Skip if this file has already added to this tree of dependencies
     # (really this should have already been checked and never reached here)
@@ -92,7 +92,8 @@ class DirectiveResolver
     directivePattern = _.clone(@config.directivePattern) # clone regex for safety
     content = fs.readFileSync targetFilePath, 'utf8'
     tree = createTree
-      relativePath: relativePath
+      relativePath: convertFromPrepressorExtension(relativePath, { parentFilename: fromRelativePath })
+      sourceRelativePath: relativePath
       originalAbsolutePath: targetFilePath
 
     # Extract out all the directives from the header (directives can only appear
@@ -120,12 +121,12 @@ class DirectiveResolver
       if _.indexOf(tmpFileCache, fullDirectivePath) isnt -1
         continue
       else
-        depTree = @getDependencyTreeFromDirectives(relativeDirectivePath, resolvedDirectiveDir, tmpFileCache, depth + 1)
+        depTree = @getDependencyTreeFromDirectives(relativeDirectivePath, resolvedDirectiveDir, relativePath, tmpFileCache, depth + 1)
 
         # Ensure a tree was returned before appending
         tree.pushChildNode depTree if depTree?
 
-    @sharedCache.storeDependencyTreeForFile relativePath, tree
+    @sharedCache.storeDependencyTree tree
 
     # if depth is 0 and tree.size() > 1
     #   tree.debugPrint (v) -> v.relativePath

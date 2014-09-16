@@ -1,4 +1,4 @@
-{ extractExtension, convertFromPrepressorExtension } = require('./utils')
+{ extractExtension } = require('./utils')
 
 class Node
   constructor: (@value, options = {}) ->
@@ -97,6 +97,7 @@ createGetter = (klass, prop, get) ->
 
 class RequireTreeNode extends Node
   createGetter @::, 'relativePath', -> @value.relativePath
+  createGetter @::, 'sourceRelativePath', -> @value.sourceRelativePath
   createGetter @::, 'originalAbsolutePath', -> @value.originalAbsolutePath
 
   listOfAllOriginalAbsoluteDependencies: ->
@@ -114,25 +115,30 @@ class RequireTreeNode extends Node
 
     @traverse (node, visitChildren) ->
       visitChildren()
-      deps.push formatValue(convertFromPrepressorExtension(node.relativePath, node.parent?.relativePath))
+      deps.push formatValue(node.relativePath)
 
     deps
 
-  allRequiredDependenciesAsHTML: (formatValue) ->
-    formatValue ?= (v) -> v
-    dependenciesHTMLContent = []
+  allRequiredDependenciesAsHTML: (options = {}) ->
+    formatValue = options.formatValue ? (v) -> v
 
-    @traverse (node, visitChildren) =>
-      val = formatValue(node.relativePath)
+    if not options.expandedDebugMode
+      @_htmlToIncludeDep(this, @relativePath)
+    else
+      console.log "Generating expanded HTML for #{@relativePath}"
+      dependenciesHTMLContent = []
 
-      dependenciesHTMLContent.push @_preIncludeComment(node, val) if node.children.length > 0
+      @traverse (node, visitChildren) =>
+        val = formatValue(node.relativePath)
 
-      visitChildren()
+        dependenciesHTMLContent.push @_preIncludeComment(node, val) if node.children.length > 0
 
-      dependenciesHTMLContent.push @_htmlToIncludeDep(node, val)
-      dependenciesHTMLContent.push @_postIncludeComment(node, val) if node.children.length > 0
+        visitChildren()
 
-    dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
+        dependenciesHTMLContent.push @_htmlToIncludeDep(node, val)
+        dependenciesHTMLContent.push @_postIncludeComment(node, val) if node.children.length > 0
+
+      dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
 
   _preIncludeComment: (node, formattedValue) ->
     extra = ''
@@ -144,7 +150,7 @@ class RequireTreeNode extends Node
     "<!-- End #{formattedValue} -->\n"
 
   _htmlToIncludeDep: (node, formattedValue) ->
-    val = convertFromPrepressorExtension formattedValue, node.parent?.relativePath
+    val = formattedValue
     val = "/#{val}" unless val[0] is '/'
 
     ext = extractExtension val

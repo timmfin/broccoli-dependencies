@@ -14,8 +14,10 @@ class DirectiveDependenciesCache
   dependencyTreeForFile: (relativePath) ->
     @treeCache[relativePath]
 
-  storeDependencyTreeForFile: (relativePath, tree) ->
-    @treeCache[relativePath] = tree
+  storeDependencyTree: (tree) ->
+    # Cache under both the source extension and processed extension
+    @treeCache[tree.relativePath] = tree
+    @treeCache[tree.sourceRelativePath] = tree if tree.relativePath isnt tree.sourceRelativePath
 
   dependencyListForFile: (relativePath) ->
     if @listCache[relativePath]?
@@ -24,18 +26,11 @@ class DirectiveDependenciesCache
       tree = @treeCache[relativePath]
       @listCache[relativePath] = tree.listOfAllFinalizedRequiredDependencies()
 
-  dependencyCountForFile: (relativePath) ->
-    if @sizeCache[relativePath]?
-      @sizeCache[relativePath]
-    else
-      tree = @treeCache[relativePath]
-      @sizeCache[relativePath] = tree.size()
-
-  debugPrint: ->
+  debugPrint: (callback) ->
     console.log 'Directive dependencies cache\n'
 
     for file, tree of @treeCache
-      tree.debugPrint()
+      tree.debugPrint(callback)
       console.log ''
 
 
