@@ -91,6 +91,7 @@ class DirectiveResolver
 
     directivePattern = _.clone(@config.directivePattern) # clone regex for safety
     content = fs.readFileSync targetFilePath, 'utf8'
+
     tree = createTree
       relativePath: convertFromPrepressorExtension(relativePath, { parentFilename: fromRelativePath })
       sourceRelativePath: relativePath
@@ -144,9 +145,10 @@ class DirectiveResolver
     # If the resolvedPath is a directory, look for an index.js|css file inside
     # of that directory
     if fs.statSync(resolvedDir + '/' + relativePath).isDirectory()
-      [resolvedDir, relativePath] = @resolveDirAndPath 'index',
+      indexRelativePath = relativePath + '/' + 'index'
+      [resolvedDir, relativePath] = @resolveDirAndPath indexRelativePath,
         filename: parentPath
-        loadPaths: [path.join(resolvedDir, relativePath)]
+        loadPaths: [resolvedDir]
 
     [
       new DirectiveResult resolvedDir, relativePath,
