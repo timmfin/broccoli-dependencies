@@ -1,13 +1,14 @@
 { extractExtension } = require('./utils')
 
-class Node
+# A basic implementation of a tree
+class TreeNode
   constructor: (@value, options = {}) ->
     { @children, @parent } = options
     @children ?= []
 
   pushChildValue: (childValues...) ->
     for childValue in childValues
-      @children.push new RequireTreeNode(childValue),
+      @children.push new @constrcutor(childValue),
         parent: this
 
   pushChildNode: (childNodes...) ->
@@ -16,8 +17,8 @@ class Node
       @children.push childNode
 
   # Push aliases (since plural and singular are same impl)
-  Node::pushChildValues = Node::pushChildValue
-  Node::pushChildNodes = Node::pushChildNode
+  TreeNode::pushChildValues = TreeNode::pushChildValue
+  TreeNode::pushChildNodes = TreeNode::pushChildNode
 
   isRoot: ->
     not @parent?
@@ -41,7 +42,7 @@ class Node
   # So depending on the order you call `visitChildren` you
   # can traverse the tree via prefix or postfix traversal.
   traverse: (callback) ->
-    RequireTreeNode.visitNode @, callback
+    @constructor.visitNode @, callback
 
   # Helper to collect all values via postfix traversal
   allValuesViaPostfix: ->
@@ -54,7 +55,7 @@ class Node
     values
 
   # Make `allValues` an alias for `allValuesViaPostfix`
-  Node::allValues = Node::allValuesViaPostfix
+  TreeNode::allValues = TreeNode::allValuesViaPostfix
 
   allValuesViaPrefix: ->
     values = []
@@ -77,9 +78,9 @@ class Node
   # Helper for traverse
   @visitNode: (node, callback, depth = 0) ->
     if node.children?.length
-      visitChildren = ->
+      visitChildren = =>
         for child in node.children
-          RequireTreeNode.visitNode child, callback, depth + 1
+          @visitNode child, callback, depth + 1
 
     visitChildren ?= ->
 
@@ -87,17 +88,18 @@ class Node
 
   # New tree helper
   @createTree: (rootValue, values = []) ->
-    children = values.map (val) -> new RequireTreeNode val
-    new RequireTreeNode rootValue, { children: children }
+    children = values.map (val) -> new @ val
+    new @ rootValue, { children: children }
 
 
 createGetter = (klass, prop, get) ->
   Object.defineProperty klass, prop, {get, configurable: yes}
 
 
-class RequireTreeNode extends Node
+# Extends and customizes TreeNode for depdnency-specific info
+class DependencyNode extends TreeNode
   createGetter @::, 'relativePath', -> @value.relativePath
-  createGetter @::, 'sourceRelativePath', -> @value.sourceRelativePath
+  createGetter @::, 'srcDir', -> @value.srcDir
   createGetter @::, 'originalAbsolutePath', -> @value.originalAbsolutePath
 
   listOfAllOriginalAbsoluteDependencies: ->
@@ -109,7 +111,7 @@ class RequireTreeNode extends Node
 
     deps
 
-  listOfAllFinalizedRequiredDependencies: (formatValue) ->
+  listOfAllDependencies: (formatValue) ->
     formatValue ?= (v) -> v
     deps = []
 
@@ -119,53 +121,26 @@ class RequireTreeNode extends Node
 
     deps
 
-  allRequiredDependenciesAsHTML: (options = {}) ->
-    formatValue = options.formatValue ? (v) -> v
+# { convertFromPrepressorExtension } = require('./utils')
 
-    if not options.expandedDebugMode
-      @_htmlToIncludeDep(this, @relativePath)
-    else
-      console.log "Generating expanded HTML for #{@relativePath}"
-      dependenciesHTMLContent = []
+# class PreprocessorAwareDependencyNode
+#   createGetter @::, 'sourceRelativePath', ->
+#     return @_sourceRelativePath if @_sourceRelativePath?
+#     return @relativePath unless @parent?
 
-      @traverse (node, visitChildren) =>
-        val = formatValue(node.relativePath)
+#   convertPaths: ->
+#     parentRelativePath = @parent?.relativePath
 
-        dependenciesHTMLContent.push @_preIncludeComment(node, val) if node.children.length > 0
-
-        visitChildren()
-
-        dependenciesHTMLContent.push @_htmlToIncludeDep(node, val)
-        dependenciesHTMLContent.push @_postIncludeComment(node, val) if node.children.length > 0
-
-      dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
-
-  _preIncludeComment: (node, formattedValue) ->
-    extra = ''
-    extra = "(total files: #{node.size()})" if node.isRoot()
-
-    "\n<!-- From #{formattedValue} #{extra} -->"
-
-  _postIncludeComment: (node, formattedValue) ->
-    "<!-- End #{formattedValue} -->\n"
-
-  _htmlToIncludeDep: (node, formattedValue) ->
-    val = formattedValue
-    val = "/#{val}" unless val[0] is '/'
-
-    ext = extractExtension val
-
-    if ext is 'js'
-      """<script src="#{val}" type="text/javascript"></script>"""
-    else if ext is 'css'
-      """<link href="#{val}" rel="stylesheet" type="text/css" />"""
-    else
-      throw new Error "Can't create HTML element for unkown file type: #{formattedValue}"
+#     @_sourceRelativePath = @value.relativePath
+#     @value.relativePath = convertFromPrepressorExtension _sourceRelativePath,
+#       parentFilename: parentRelativePath
 
 
 
 
-module.exports = RequireTreeNode
+
+
+module.exports = DependencyNode
 
 
 

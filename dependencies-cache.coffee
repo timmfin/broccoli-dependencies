@@ -1,12 +1,7 @@
-debugCtr = 1
-
 class DirectiveDependenciesCache
   constructor: ->
     @treeCache = {}
     @listCache = {}
-    @sizeCache = {}
-
-    @debugInstance = debugCtr++
 
   hasFile: (relativePath) ->
     !!@treeCache[relativePath]
@@ -24,10 +19,10 @@ class DirectiveDependenciesCache
       @listCache[relativePath]
     else
       tree = @treeCache[relativePath]
-      @listCache[relativePath] = tree.listOfAllFinalizedRequiredDependencies()
+      @listCache[relativePath] = tree.listOfAllDependencies()
 
   debugPrint: (callback) ->
-    console.log 'Directive dependencies cache\n'
+    console.log 'Dependencies cache\n'
 
     for file, tree of @treeCache
       tree.debugPrint(callback)
