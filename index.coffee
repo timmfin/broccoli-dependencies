@@ -115,7 +115,9 @@ class CopyDirectiveDependenciesFilter extends Filter
 
     # Exclude paths that already exist in the srcDir or already have been copied
     dependenciesToCopy = allAbsoluteDependencyPaths.filter (p) =>
-      if p.indexOf(srcDir) isnt 0 and not @copiedDependencies[p]
+      pathInsideSrcDir = p.indexOf(srcDir) is 0
+
+      if not pathInsideSrcDir and not @copiedDependencies[p] and @filter?(p) isnt false
         @copiedDependencies[p] = true
         true
       else
