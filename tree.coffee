@@ -6,6 +6,9 @@ class TreeNode
     { @children, @parent } = options
     @children ?= []
 
+    for child in @children
+      @children.parent = this
+
   pushChildValue: (childValues...) ->
     for childValue in childValues
       @children.push new @constrcutor(childValue),
@@ -19,6 +22,14 @@ class TreeNode
   # Push aliases (since plural and singular are same impl)
   TreeNode::pushChildValues = TreeNode::pushChildValue
   TreeNode::pushChildNodes = TreeNode::pushChildNode
+
+  pushTypedChildNode: (type, childNode) ->
+    @childrenByType ?= {}
+    @childrenByType[type] ?= []
+    @childrenByType[type].push childNode
+
+  childTypes: ->
+    Object.keys(@childrenByType ? {})
 
   isRoot: ->
     not @parent?
@@ -41,8 +52,11 @@ class TreeNode
   #
   # So depending on the order you call `visitChildren` you
   # can traverse the tree via prefix or postfix traversal.
-  traverse: (callback) ->
-    @constructor.visitNode @, callback
+  traverse: (callback, type = null) ->
+    @constructor.visitNode @, callback, type
+
+  traverseByType: (type, callback) ->
+    @constructor.visitNode @, callback, type
 
   # Helper to collect all values via postfix traversal
   allValuesViaPostfix: ->
@@ -66,21 +80,30 @@ class TreeNode
 
     values
 
-  debugPrint: (formatValue) ->
+  debugPrint: (formatValue, type = null) ->
     formatValue = ((v) -> v) unless formatValue?
 
     @traverse (node, visitChildren, depth) ->
       indent = ('  ' for [0...depth]).join('')
       console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
       visitChildren()
+    , type
+
+  debugPrintForType: (type, formatValue) ->
+    @debugPrint formatValue, type
 
 
   # Helper for traverse
-  @visitNode: (node, callback, depth = 0) ->
-    if node.children?.length
+  @visitNode: (node, callback, type = null, depth = 0) ->
+    if type?
+      children = node.childrenByType?[type]
+    else
+      children = node.children
+
+    if children?.length
       visitChildren = =>
-        for child in node.children
-          @visitNode child, callback, depth + 1
+        for child in children
+          @visitNode child, callback, type, depth + 1
 
     visitChildren ?= ->
 

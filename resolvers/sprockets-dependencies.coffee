@@ -9,7 +9,6 @@ util = require('util')
 
 BaseResovler = require('./base')
 DependencyNode = require('../tree')
-Dependency = require('../dependency')
 
 
 HEADER_PATTERN = ///
@@ -128,7 +127,7 @@ class SprocketsResolver extends BaseResovler
         loadPaths: [resolvedDir]
 
     [
-      new Dependency resolvedDir, relativePath,
+      @createDependency resolvedDir, relativePath,
         from: "require #{requiredPath}"
     ]
 
@@ -153,8 +152,8 @@ class SprocketsResolver extends BaseResovler
     walkSync(dirPath).filter (p) ->
       ext = path.extname(p).slice(1)
       ext isnt '' and ext in validExtensions
-    .map (p) ->
-      new Dependency resolvedDir, relativePath + '/' + p,
+    .map (p) =>
+      @createDependency resolvedDir, relativePath + '/' + p,
         from: "require_tree #{requiredDir}"
 
   _process_require_directory_directive: (parentPath, requiredDir) ->
@@ -178,8 +177,8 @@ class SprocketsResolver extends BaseResovler
     fs.readdirSync(dirPath).filter (p) ->
       ext = path.extname(p).slice(1)
       ext isnt '' and ext in validExtensions
-    .map (p) ->
-      new Dependency resolvedDir, relativePath + '/' + p,
+    .map (p) =>
+      @createDependency resolvedDir, relativePath + '/' + p,
         from: "require_directory #{requiredDir}"
 
 

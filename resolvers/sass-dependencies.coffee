@@ -3,8 +3,6 @@
 path = require('path')
 
 BaseResovler = require('./base')
-Dependency = require('../dependency')
-
 
 
 class SassDependenciesResolver extends BaseResovler
@@ -53,7 +51,7 @@ class SassDependenciesResolver extends BaseResovler
         loadPaths: baseDirs
 
       if relativeDepPath?
-        depObjects.push new Dependency(resolvedDepDir, relativeDepPath)
+        depObjects.push @createDependency(resolvedDepDir, relativeDepPath)
       else
         throw new Error "Couldn't find #{relativeDepPath} in any of these directories: #{baseDirs.join(', ')}"
 

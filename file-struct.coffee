@@ -3,7 +3,7 @@ createGetter = (klass, prop, get) ->
   Object.defineProperty klass, prop, {get, configurable: yes}
 
 
-class Dependency
+class FileStruct
   constructor: (@srcDir, @relativePath, @extra = {}) ->
 
   createGetter @::, 'originalAbsolutePath', ->
@@ -11,4 +11,4 @@ class Dependency
 
 
 
-module.exports = Dependency
+module.exports = FileStruct

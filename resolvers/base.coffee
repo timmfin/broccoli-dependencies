@@ -3,6 +3,7 @@ fs = require('fs')
 _ = require('lodash')
 
 DependenciesCache = require('../dependencies-cache')
+FileStruct = require('../file-struct')
 
 { stripBaseDirectory, extractExtension, extractBaseDirectoryAndRelativePath, convertFromPrepressorExtension } = require('../utils')
 
@@ -135,6 +136,11 @@ class BaseResolver
       extension = extractExtension(options.filename)
 
     [extension]
+
+  createDependency: (depDir, depPath, extra = {}) ->
+    DependencyConstructor = @config.dependencyConstructor ? FileStruct
+    extra.dependencyType = @type
+    new DependencyConstructor depDir, depPath, extra
 
 
 module.exports = BaseResolver
