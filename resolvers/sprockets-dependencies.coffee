@@ -76,16 +76,6 @@ class SprocketsResolver extends BaseResovler
   extractHeader: (content) ->
     @constructor.extractHeader(@config.headerPattern)
 
-
-  # Ensure that dependendencies are accessesed/followed by the finalized
-  # extension, after any preprocessing
-  modifyDependencyNode: (treeNode) ->
-    parentRelativePath = treeNode.parent?.relativePath
-
-    treeNode.value.sourceRelativePath = treeNode.value.relativePath
-    treeNode.value.relativePath = convertFromPrepressorExtension treeNode.value.sourceRelativePath,
-      parentFilename: parentRelativePath
-
   processDependenciesInContent: (content, relativePath, srcDir) ->
     targetFilePath = srcDir + '/' + relativePath
 
@@ -227,55 +217,6 @@ class SprocketsResolver extends BaseResovler
 
 # So extenions can be required
 SprocketsResolver.REQUIREABLE_EXTENSIONS = REQUIREABLE_EXTENSIONS
-
-
-
-
-class RequireTreeNode extends DependencyNode
-  allRequiredDependenciesAsHTML: (options = {}) ->
-    formatValue = options.formatValue ? (v) -> v
-
-    if not options.expandedDebugMode
-      @_htmlToIncludeDep(this, @relativePath)
-    else
-      console.log "Generating expanded HTML for #{@relativePath}"
-      dependenciesHTMLContent = []
-
-      @traverse (node, visitChildren) =>
-        val = formatValue(node.relativePath)
-
-        dependenciesHTMLContent.push @_preIncludeComment(node, val) if node.children.length > 0
-
-        visitChildren()
-
-        dependenciesHTMLContent.push @_htmlToIncludeDep(node, val)
-        dependenciesHTMLContent.push @_postIncludeComment(node, val) if node.children.length > 0
-
-      dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
-
-  _preIncludeComment: (node, formattedValue) ->
-    extra = ''
-    extra = "(total files: #{node.size()})" if node.isRoot()
-
-    "\n<!-- From #{formattedValue} #{extra} -->"
-
-  _postIncludeComment: (node, formattedValue) ->
-    "<!-- End #{formattedValue} -->\n"
-
-  _htmlToIncludeDep: (node, formattedValue) ->
-    val = formattedValue
-    val = "/#{val}" unless val[0] is '/'
-
-    ext = extractExtension val
-
-    if ext is 'js'
-      """<script src="#{val}" type="text/javascript"></script>"""
-    else if ext is 'css'
-      """<link href="#{val}" rel="stylesheet" type="text/css" />"""
-    else
-      throw new Error "Can't create HTML element for unkown file type: #{formattedValue}"
-
-
 
 
 

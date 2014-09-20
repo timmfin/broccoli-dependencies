@@ -1,4 +1,5 @@
-class DirectiveDependenciesCache
+
+class DependenciesCache
   constructor: ->
     @treeCache = {}
     @listCache = {}
@@ -12,7 +13,9 @@ class DirectiveDependenciesCache
   storeDependencyTree: (tree) ->
     # Cache under both the source extension and processed extension
     @treeCache[tree.relativePath] = tree
-    @treeCache[tree.sourceRelativePath] = tree if tree.relativePath isnt tree.sourceRelativePath
+
+    if tree.sourceRelativePath? and tree.relativePath isnt tree.sourceRelativePath
+      @treeCache[tree.sourceRelativePath] = tree
 
   dependencyListForFile: (relativePath) ->
     if @listCache[relativePath]?
@@ -29,7 +32,26 @@ class DirectiveDependenciesCache
       console.log ''
 
 
-module.exports = DirectiveDependenciesCache
+{ convertFromPrepressorExtension } = require('./utils')
+
+# Ensure that dependendencies are accessesed/followed by the finalized
+# extension, after any preprocessing
+class PreprocessorAwareDepenenciesCache extends DependenciesCache
+  storeDependencyTree: (tree) ->
+    if not tree.value.sourceRelativePath?
+      parentRelativePath = tree.parent?.relativePath
+
+      tree.value.sourceRelativePath = tree.value.relativePath
+      tree.value.relativePath = convertFromPrepressorExtension tree.value.sourceRelativePath,
+        parentFilename: parentRelativePath
+
+    super tree
+
+
+
+
+
+module.exports = PreprocessorAwareDepenenciesCache
 
 
 

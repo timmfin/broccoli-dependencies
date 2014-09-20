@@ -23,14 +23,6 @@ class TreeNode
   TreeNode::pushChildValues = TreeNode::pushChildValue
   TreeNode::pushChildNodes = TreeNode::pushChildNode
 
-  pushTypedChildNode: (type, childNode) ->
-    @childrenByType ?= {}
-    @childrenByType[type] ?= []
-    @childrenByType[type].push childNode
-
-  childTypes: ->
-    Object.keys(@childrenByType ? {})
-
   isRoot: ->
     not @parent?
 
@@ -52,11 +44,8 @@ class TreeNode
   #
   # So depending on the order you call `visitChildren` you
   # can traverse the tree via prefix or postfix traversal.
-  traverse: (callback, type = null) ->
-    @constructor.visitNode @, callback, type
-
-  traverseByType: (type, callback) ->
-    @constructor.visitNode @, callback, type
+  traverse: (callback) ->
+    @constructor.visitNode @, callback
 
   # Helper to collect all values via postfix traversal
   allValuesViaPostfix: ->
@@ -80,30 +69,22 @@ class TreeNode
 
     values
 
-  debugPrint: (formatValue, type = null) ->
+  debugPrint: (formatValue) ->
     formatValue = ((v) -> v) unless formatValue?
 
     @traverse (node, visitChildren, depth) ->
       indent = ('  ' for [0...depth]).join('')
       console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
       visitChildren()
-    , type
-
-  debugPrintForType: (type, formatValue) ->
-    @debugPrint formatValue, type
-
 
   # Helper for traverse
-  @visitNode: (node, callback, type = null, depth = 0) ->
-    if type?
-      children = node.childrenByType?[type]
-    else
-      children = node.children
+  @visitNode: (node, callback, depth = 0) ->
+    children = node.children
 
     if children?.length
       visitChildren = =>
         for child in children
-          @visitNode child, callback, type, depth + 1
+          @visitNode child, callback, depth + 1
 
     visitChildren ?= ->
 
@@ -119,8 +100,57 @@ createGetter = (klass, prop, get) ->
   Object.defineProperty klass, prop, {get, configurable: yes}
 
 
+class TypedChildrenNode extends TreeNode
+
+  pushTypedChildNode: (type, childNode) ->
+    @childrenByType ?= {}
+    @childrenByType[type] ?= []
+    @childrenByType[type].push childNode
+
+  childTypes: ->
+    Object.keys(@childrenByType ? {})
+
+  sizeForType: (type) ->
+    count = 0
+
+    @traverseByType type, (node, visitChildren) ->
+      count++
+      visitChildren()
+
+    count
+
+  traverseByType: (type, callback) ->
+    if type?
+      @constructor.visitNodeForType @, type, callback
+    else
+      @traverse callback
+
+  debugPrintForType: (type, formatValue) ->
+    formatValue = ((v) -> v) unless formatValue?
+
+    @traverseByType type, (node, visitChildren, depth) ->
+      indent = ('  ' for [0...depth]).join('')
+      console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
+      visitChildren()
+
+  debugPrintForType: (type, formatValue) ->
+    @debugPrint formatValue, type
+
+  @visitNodeForType: (node, type, callback, depth = 0) ->
+    children = node.childrenByType?[type]
+
+    if children?.length
+      visitChildren = =>
+        for child in children
+          @visitNodeForType child, type, callback, depth + 1
+
+    visitChildren ?= ->
+
+    callback node, visitChildren, depth
+
+
 # Extends and customizes TreeNode for depdnency-specific info
-class DependencyNode extends TreeNode
+class DependencyNode extends TypedChildrenNode
   createGetter @::, 'relativePath', -> @value.relativePath
   createGetter @::, 'srcDir', -> @value.srcDir
   createGetter @::, 'originalAbsolutePath', -> @value.originalAbsolutePath

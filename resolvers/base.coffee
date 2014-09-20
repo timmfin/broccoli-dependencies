@@ -41,9 +41,6 @@ class BaseResolver
       if relativePath.slice(relativePath.length - extension.length - 1) is ".#{extension}"
         return true
 
-  modifyDependencyNode: (treeNode) ->
-    # Optionally customize or modify the treeNode for this dependency tree
-
   processDependenciesInContent: (content, tree, relativePath, srcDir, next) ->
     throw new Error "processDependenciesInContent needs be overridden by your custom dependency resolver"
 
