@@ -1,17 +1,17 @@
 'use strict'
 
-RSVP    = require('rsvp')
-path    = require('path')
-fs      = require('fs')
-helpers = require('broccoli-kitchen-sink-helpers')
-mkdirp  = require('mkdirp')
-async   = require('async')
+RSVP      = require('rsvp')
+path      = require('path')
+fs        = require('fs')
+helpers   = require('broccoli-kitchen-sink-helpers')
+mkdirp    = require('mkdirp')
+async     = require('async')
+pluralize = require('pluralize')
 
 { stripBaseDirectory, convertFromPrepressorExtension } = require('./utils')
 Filter                 = require('broccoli-filter')
 SprocketsResolver      = require('./resolvers/sprockets-dependencies')
-DependencyNode         = require('./tree')
-Dependency             = require('./dependency')
+MultiResolver          = require('./multi-resolver')
 
 
 # Follows the dependency tree from Sprockets `//= require ...` directives, and
@@ -21,20 +21,17 @@ Dependency             = require('./dependency')
 # This is necessary to ensure that any `require`-ed files that need preprocessing
 # (like Sass or Coffeescript) are included before the rest of the build steps.
 
-class CopyDirectiveDependenciesFilter extends Filter
+class CopyDependenciesFilter extends Filter
 
   constructor: (inputTree, options = {}) ->
-    if not (this instanceof CopyDirectiveDependenciesFilter)
-      return new CopyDirectiveDependenciesFilter(inputTree, options)
+    if not (this instanceof CopyDependenciesFilter)
+      return new CopyDependenciesFilter(inputTree, options)
 
     @inputTree = inputTree
     @options = options
 
-    @extensions = []
-
-    for Resolver in @options.resolvers
-      for ext in Resolver::extensions
-        @extensions.push(ext) if @extensions.indexOf(ext) is -1
+    @multiResolver = new MultiResolver options
+    @extensions = @multiResolver.allResolverExtensions()
 
     @copiedDependencies = {}
 
@@ -47,8 +44,10 @@ class CopyDirectiveDependenciesFilter extends Filter
 
     # If this file had `require` dependencies, then copy them into our Broccoli
     # output because we will need to compile them (and copy the compiled output) later
+    numDepsInTree = depTree.size() - 1
+
     if dependenciesToCopy.length > 0
-      console.log "Copying all missing dependencies from #{relativePath} (#{dependenciesToCopy.length} file#{if dependenciesToCopy.length > 1 then 's' else ''} out of #{depTree.size() - 1} deps)"
+      console.log "Copying all missing dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy)} out of #{numDepsInTree} deps)"
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
       relativeCopiedPaths = for depPath in dependenciesToCopy
@@ -66,58 +65,18 @@ class CopyDirectiveDependenciesFilter extends Filter
       cacheInfo =
         outputFiles: outputfilesToCache
 
-  # TODO extract out of this filter (into something re-usable)
-  findDependenciesViaResolvers: (relativePath, srcDir, tmpFileCache = {}, depth = 0) ->
-    currentNode = @createTree srcDir, relativePath
-
-    # Skip any parsing/caclulation if this tree has already been calculated
-    if @options.cache.hasFile relativePath
-      @options.cache.dependencyTreeForFile relativePath
-
-    else
-      dependencies = @_findDependenciesViaResolversHelper(relativePath, srcDir, tmpFileCache, depth)
-
-      # Recursively look for dependencies in all of the new children just added
-      for dep in dependencies
-        newDepNode = @findDependenciesViaResolvers dep.relativePath, dep.srcDir, tmpFileCache, depth + 1
-        currentNode.pushChildNode newDepNode
-
-      @options.cache.storeDependencyTree currentNode
-      currentNode
-
-  _findDependenciesViaResolversHelper: (relativePath, srcDir, tmpFileCache, depth) ->
-    targetFilePath = srcDir + '/' + relativePath
-
-    # Skip if this file has already added to this tree of dependencies (to
-    # avoid circular dependencies)
-    return [] if tmpFileCache[targetFilePath]
-    tmpFileCache[targetFilePath] = true
-
-    dependenciesFromAllResolvers = []
-
-    for Resolver in @options.resolvers
-      resolver = new Resolver
-        loadPaths: [srcDir].concat(@options.loadPaths)
-        cache: @options.cache
-
-      if resolver.shouldProcessFile(relativePath)
-        newDeps = resolver.dependenciesForFile(relativePath, srcDir, tmpFileCache, depth)
-        dependenciesFromAllResolvers = dependenciesFromAllResolvers.concat newDeps
-
-    dependenciesFromAllResolvers
-
-  createTree: (srcDir, relativePath) ->
-    DependencyNode.createTree new Dependency(srcDir, relativePath)
+    else if numDepsInTree > 0
+      console.log "Found #{numDepsInTree} #{pluralize('deps', numDepsInTree)} for #{relativePath}, but #{if numDepsInTree is 1 then 'it' else 'all'} already #{if numDepsInTree is 1 then 'exists' else 'exist'} in the broccoli tree"
 
   processDependenciesToCopy: (relativePath, srcDir) ->
-    depTree = @findDependenciesViaResolvers relativePath, srcDir
+    depTree = @multiResolver.findDependencies(relativePath, srcDir)
     allAbsoluteDependencyPaths = depTree.listOfAllOriginalAbsoluteDependencies()
 
     # Exclude paths that already exist in the srcDir or already have been copied
     dependenciesToCopy = allAbsoluteDependencyPaths.filter (p) =>
       pathInsideSrcDir = p.indexOf(srcDir) is 0
 
-      if not pathInsideSrcDir and not @copiedDependencies[p] and @filter?(p) isnt false
+      if not pathInsideSrcDir and not @copiedDependencies[p] and @options.filter?(p) isnt false
         @copiedDependencies[p] = true
         true
       else
@@ -137,7 +96,7 @@ class CopyDirectiveDependenciesFilter extends Filter
 #
 #     sharedDependencyCache = new DependenciesCache
 #
-#     tree = CopyDirectiveDependenciesFilter tree,
+#     tree = CopyDependenciesFilter tree,
 #       cache: sharedDependencyCache
 #       loadPaths: externalLoadPaths
 #
@@ -211,6 +170,6 @@ class InsertDirectiveContentsFilter extends Filter
 
 
 module.exports = {
-  CopyDirectiveDependenciesFilter
+  CopyDependenciesFilter
   InsertDirectiveContentsFilter
 }
