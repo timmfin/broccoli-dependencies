@@ -12,15 +12,15 @@ DependencyNode = require('../tree')
 
 
 HEADER_PATTERN = ///
-  ^ (
-    (?:[\s]*) (
-      (\/\* (?:.*?) \*\/) |
-      (\#\#\# (?:.*?) \#\#\#) |
-      (\/\/ .* \n?)+ |
-      (\# .* \n?)+
-    )
-  )+
-///gm
+  ^(?: \s*
+    (
+      (?: /[*] (?:\s*|.+?) *? [*]/ ) |              # CSS-style comments `/* ... */`
+      (?: \#\#\#\n (?:\s*|.+?) *? \n \#\#\# ) |     # Coffeescript block comments
+      (?: //.*\n? )+ |                              # C-style single line comments `//`
+      (?: \#.*\n? )+                                # Coffeescript single-line comments `#`
+    )*
+  )*
+///m
 
 DIRECTIVE_PATTERN = ///
   ^
