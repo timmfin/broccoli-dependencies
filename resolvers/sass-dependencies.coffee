@@ -35,7 +35,6 @@ class SassDependenciesResolver extends BaseResovler
     depPaths = []
     depObjects = []
     absolutePath = srcDir + '/' + relativePath
-    baseDirs = [path.dirname(absolutePath), srcDir].concat(@config.loadPaths)
 
     while match = depKeywordRegex.exec(content)
       importedPath = match[2]
@@ -45,10 +44,26 @@ class SassDependenciesResolver extends BaseResovler
       else
         depPaths.push importedPath
 
+
     for relativeDepPath in depPaths
-      [resolvedDepDir, relativeDepPath] = @resolveDirAndPath relativeDepPath,
-        filename: absolutePath
-        loadPaths: baseDirs
+
+      # Also search in '_<filename>' (Sass partials)
+      basename = path.basename relativeDepPath
+      alsoTryPartial = basename[0] isnt '_'
+
+      try
+        [resolvedDepDir, relativeDepPath] = @resolveDirAndPath relativeDepPath,
+          filename: absolutePath
+          loadPaths: @config.loadPaths
+      catch e
+        if alsoTryPartial
+          prefixedRelativeDepPath = relativeDepPath.slice(0, -1 * basename.length) + '_' + basename
+
+          [resolvedDepDir, relativeDepPath] = @resolveDirAndPath prefixedRelativeDepPath,
+            filename: absolutePath
+            loadPaths: @config.loadPaths
+        else
+          throw e
 
       if relativeDepPath?
         depObjects.push @createDependency(resolvedDepDir, relativeDepPath)
