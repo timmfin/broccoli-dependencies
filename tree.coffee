@@ -110,6 +110,9 @@ class TypedChildrenNode extends TreeNode
   childTypes: ->
     Object.keys(@childrenByType ? {})
 
+  childrenForType: (type) ->
+    @childrenByType?[type] ? []
+
   sizeForType: (type) ->
     count = 0
 
@@ -164,11 +167,11 @@ class DependencyNode extends TypedChildrenNode
 
     deps
 
-  listOfAllDependencies: (formatValue) ->
+  listOfAllDependenciesForType: (type, formatValue) ->
     formatValue ?= (v) -> v
     deps = []
 
-    @traverse (node, visitChildren) ->
+    @traverseByType type, (node, visitChildren) ->
       visitChildren()
       deps.push formatValue(node.relativePath)
 
