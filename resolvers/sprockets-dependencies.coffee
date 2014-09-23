@@ -54,7 +54,9 @@ REQUIREABLE_EXTENSIONS = POTENTIAL_DIRECTIVE_EXTENSIONS.concat [
 
 class SprocketsResolver extends BaseResovler
   type: 'sprockets'
+
   extensions: POTENTIAL_DIRECTIVE_EXTENSIONS
+  allowedDependencyExtensions: REQUIREABLE_EXTENSIONS
 
   constructor: (config = {}) ->
     super(config)
@@ -70,7 +72,6 @@ class SprocketsResolver extends BaseResovler
     headerPattern = _.clone(customHeaderPattern ? HEADER_PATTERN)
 
     # Must be at the very beginning of the file
-    # if match = content.match @config.headerPattern #and match?.index is 0
     if (match = headerPattern.exec(content)) and match?.index is 0
       match[0]
 
@@ -107,6 +108,7 @@ class SprocketsResolver extends BaseResovler
     [resolvedDir, relativePath] = @resolveDirAndPath requiredPath,
       filename: parentPath
       loadPaths: @config.loadPaths
+      allowRelativeLookupWithoutPrefix: false
       allowDirectory: true
 
     # If the resolvedPath is a directory, look for an index.js|css file inside
@@ -116,6 +118,7 @@ class SprocketsResolver extends BaseResovler
       [resolvedDir, relativePath] = @resolveDirAndPath indexRelativePath,
         filename: parentPath
         loadPaths: [resolvedDir]
+        allowRelativeLookupWithoutPrefix: false
 
     [
       @createDependency resolvedDir, relativePath,
@@ -128,6 +131,7 @@ class SprocketsResolver extends BaseResovler
     [resolvedDir, relativePath] = @resolveDirAndPath requiredDir,
       filename: parentPath
       loadPaths: @config.loadPaths
+      allowRelativeLookupWithoutPrefix: false
       onlyDirectory: true
 
     dirPath = path.join resolvedDir, relativePath
@@ -135,7 +139,7 @@ class SprocketsResolver extends BaseResovler
     # Even though just a dir, call check extensions so that we look at the parent file
     # (the file the require came from) to see what kind of files we should filter
     # the directory for
-    validExtensions = @_extensionsToCheck requiredDir,
+    validExtensions = @extensionsToCheck requiredDir,
       filename: parentPath
 
     # Gather all recursive files, exclude any that don't have a matching extension,
@@ -153,6 +157,7 @@ class SprocketsResolver extends BaseResovler
     [resolvedDir, relativePath] = @resolveDirAndPath requiredDir,
       filename: parentPath
       loadPaths: @config.loadPaths
+      allowRelativeLookupWithoutPrefix: false
       onlyDirectory: true
 
     dirPath = path.join resolvedDir, relativePath
