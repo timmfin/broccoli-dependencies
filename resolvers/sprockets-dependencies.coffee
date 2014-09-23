@@ -15,7 +15,7 @@ HEADER_PATTERN = ///
   ^(?: \s*
     (
       (?: /[*] (?:\s*|.+?) *? [*]/ ) |              # CSS-style comments `/* ... */`
-      (?: \#\#\#\n (?:\s*|.+?) *? \n \#\#\# ) |     # Coffeescript block comments
+      (?: \#\#\# \n (?:[\s\S]*) \n \#\#\# ) |       # Coffeescript block comments
       (?: //.*\n? )+ |                              # C-style single line comments `//`
       (?: \#.*\n? )+                                # Coffeescript single-line comments `#`
     )*
