@@ -42,12 +42,13 @@ POTENTIAL_DIRECTIVE_EXTENSIONS = [
 
   'coffee'
   'js'
+
+  'lyaml'
 ]
 
 # File types that can be referenced from a directive
 REQUIREABLE_EXTENSIONS = POTENTIAL_DIRECTIVE_EXTENSIONS.concat [
   'jade'
-  'lyaml'
 ]
 
 
