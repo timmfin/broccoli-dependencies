@@ -7,7 +7,7 @@ class FileStruct
   constructor: (@srcDir, @relativePath, @extra = {}) ->
 
   createGetter @::, 'originalAbsolutePath', ->
-    "#{@srcDir}/#{@relativePath}"
+    "#{@srcDir}/#{@sourceRelativePath ? @relativePath}"
 
 
 

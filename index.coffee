@@ -47,7 +47,7 @@ class CopyDependenciesFilter extends Filter
     numDepsInTree = depTree.size() - 1
 
     if dependenciesToCopy.length > 0
-      console.log "Copying all missing dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy)} out of #{numDepsInTree} deps)"
+      console.log "Copying all missing dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
       relativeCopiedPaths = for depPath in dependenciesToCopy
@@ -132,7 +132,7 @@ class InsertDirectiveContentsFilter extends Filter
 
     # Assumes that a pre-filled dependency cache instance was passed into this filter
     depTree = @options.cache.dependencyTreeForFile relativePath
-    allRelativeDependencyPaths = depTree?.listOfAllDependencies() ? []
+    allRelativeDependencyPaths = depTree?.listOfAllDependenciesForType('sprockets') ? []
     allRelativeDependencyPaths.pop()  # remove the self dependency
 
     if not depTree? or allRelativeDependencyPaths.length is 0
@@ -142,7 +142,6 @@ class InsertDirectiveContentsFilter extends Filter
       # only the directive lines in the header were removed)
       header = SprocketsResolver.extractHeader(fileContents)
       fileContents = fileContents.slice(header.length) if fileContents.indexOf(header) is 0
-      # console.log "\nfileContents", fileContents
 
       deferred = RSVP.defer()
 
