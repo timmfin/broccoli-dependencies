@@ -1,4 +1,4 @@
-{ extractExtension } = require('./utils')
+{ extractExtension } = require('bender-broccoli-utils')
 
 # A basic implementation of a tree
 class TreeNode
@@ -176,20 +176,6 @@ class DependencyNode extends TypedChildrenNode
       deps.push formatValue(node.relativePath)
 
     deps
-
-# { convertFromPrepressorExtension } = require('./utils')
-
-# class PreprocessorAwareDependencyNode
-#   createGetter @::, 'sourceRelativePath', ->
-#     return @_sourceRelativePath if @_sourceRelativePath?
-#     return @relativePath unless @parent?
-
-#   convertPaths: ->
-#     parentRelativePath = @parent?.relativePath
-
-#     @_sourceRelativePath = @value.relativePath
-#     @value.relativePath = convertFromPrepressorExtension _sourceRelativePath,
-#       parentFilename: parentRelativePath
 
 
 
