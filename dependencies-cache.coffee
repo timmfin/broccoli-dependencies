@@ -68,6 +68,28 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
         @convertPreprocessorExtensionForNode child
 
 
+  # Try super methods with out without preprocessor conversion
+
+  wrappedMethods = [
+    'hasFile'
+    'dependencyTreeForFile'
+    'dependencyListForFile'
+  ]
+
+  for methodName in wrappedMethods
+    do (methodName) ->
+      PreprocessorAwareDepenenciesCache::[methodName] = (relativePath) ->
+        result = DependenciesCache::[methodName].call(this, relativePath)
+        return result if result
+
+        processedPath = @convertFromPreprocessorExtension(relativePath)
+
+        if processedPath != relativePath
+          DependenciesCache::[methodName].call(this, processedPath)
+        else
+          result
+
+
 
 
 
