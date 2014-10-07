@@ -1,8 +1,7 @@
 
 class DependenciesCache
   constructor: ->
-    @treeCache = {}
-    @listCache = {}
+    @clearAll()
 
   hasFile: (relativePath) ->
     !!@treeCache[relativePath]
@@ -30,6 +29,10 @@ class DependenciesCache
     for file, tree of @treeCache
       tree.debugPrint(callback)
       console.log ''
+
+  clearAll: ->
+    @treeCache = {}
+    @listCache = {}
 
 
 { convertFromPreprocessorExtension } = require('bender-broccoli-utils')

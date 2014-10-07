@@ -6,7 +6,7 @@ DependencyNode = require('./tree')
 class MultiResolver
   constructor: (@options = {}) ->
     @resolvers = @options.resolvers
-    @depCache = @options.cache ? new DependenciesCache
+    @dependencyCache = @options.dependencyCache ? new DependenciesCache
 
   allResolverExtensions: ->
     allExtensions = []
@@ -24,8 +24,8 @@ class MultiResolver
     currentNode = new DependencyNode fileStruct
 
     # Skip any parsing/caclulation if this tree has already been calculated
-    if @depCache.hasFile fileStruct.relativePath
-      existingTree = @depCache.dependencyTreeForFile fileStruct.relativePath
+    if @dependencyCache.hasFile fileStruct.relativePath
+      existingTree = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
 
     else
       dependencies = @_findDependenciesAmongResolvers(fileStruct.relativePath, fileStruct.srcDir, tmpFileCache, depth)
@@ -38,7 +38,7 @@ class MultiResolver
         if dep.extra.dependencyType?
           currentNode.pushTypedChildNode(dep.extra.dependencyType, newDepNode)
 
-      @depCache.storeDependencyTree currentNode
+      @dependencyCache.storeDependencyTree currentNode
       currentNode
 
   _findDependenciesAmongResolvers: (relativePath, srcDir, tmpFileCache, depth) ->
@@ -54,7 +54,7 @@ class MultiResolver
     for Resolver in @resolvers
       resolver = new Resolver
         loadPaths: [srcDir].concat(@options.loadPaths)
-        cache: @options.cache
+        dependencyCache: @options.dependencyCache
 
       if resolver.shouldProcessFile(relativePath)
         newDeps = resolver.dependenciesForFile(relativePath, srcDir, tmpFileCache, depth)

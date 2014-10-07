@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "dependencies": {
     "bender-broccoli-utils": "git://github.com/timmfin/bender-broccoli-utils.git",
-    "broccoli-filter": "^0.1.6",
+    "broccoli-caching-writer": "git://github.com/timmfin/broccoli-caching-writer.git#only-check-cache-for-included-or-excluded-files",
     "broccoli-kitchen-sink-helpers": "^0.2.4",
     "coffee-script": "^1.8.0",
     "lodash": "^2.4.1",
