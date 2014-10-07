@@ -157,20 +157,32 @@ class DependencyNode extends TypedChildrenNode
 
   listOfAllOriginalAbsoluteDependencies: ->
     deps = []
+    addedDeps = {}
 
     @traverse (node, visitChildren) ->
       visitChildren()
-      deps.push node.originalAbsolutePath
+
+      if not addedDeps[node.originalAbsolutePath]?
+        deps.push node.originalAbsolutePath
+        addedDeps[node.originalAbsolutePath] = true
 
     deps
+
+  listOfAllDependencies: (formatValue) ->
+    @listOfAllDependenciesForType undefined, formatValue
 
   listOfAllDependenciesForType: (type, formatValue) ->
     formatValue ?= (v) -> v
     deps = []
+    addedDeps = {}
 
     @traverseByType type, (node, visitChildren) ->
       visitChildren()
-      deps.push formatValue(node.relativePath)
+      val = formatValue(node.relativePath)
+
+      if not addedDeps[val]?
+        deps.push val
+        addedDeps[val] = true
 
     deps
 
