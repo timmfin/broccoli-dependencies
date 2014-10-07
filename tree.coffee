@@ -136,9 +136,6 @@ class TypedChildrenNode extends TreeNode
       console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
       visitChildren()
 
-  debugPrintForType: (type, formatValue) ->
-    @debugPrint formatValue, type
-
   @visitNodeForType: (node, type, callback, depth = 0) ->
     children = node.childrenByType?[type]
 
