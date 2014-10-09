@@ -35,7 +35,7 @@ class DependenciesCache
     @listCache = {}
 
 
-{ convertFromPreprocessorExtension } = require('bender-broccoli-utils')
+{ convertFromPreprocessorExtension, extractExtension, resolvePath } = require('bender-broccoli-utils')
 
 
 # Ensure that dependendencies are accessesed/followed by the finalized
@@ -52,6 +52,42 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
   storeDependencyTree: (tree) ->
     @convertPreprocessorExtensionForNode tree
     super tree
+
+  listOfAllResolvedDependencyPaths: (relativePath, options={}) ->
+    depTree = @dependencyTreeForFile(relativePath)
+    return undefined unless depTree?
+
+    deps = []
+    addedDeps = {}
+
+    depTree.traverse (node, visitChildren) ->
+      visitChildren()
+      ext = extractExtension(node.value.relativePath)
+      extensionsToCheck = [ext]
+
+      if node.value.relativePath != node.value.sourceRelativePath
+        originalExtension = extractExtension node.value.sourceRelativePath,
+          filename: node.parent?.relativePath
+
+        extensionsToCheck.push originalExtension
+
+      # Also look up the dep in the original directory it came from (just in
+      # case it has been removed from the tree at some point)
+      # loadPaths = [].concat(options.loadPaths).concat([node.value.srcDir])
+
+      resolvedPath = resolvePath node.value.relativePath,
+        loadPaths: options.loadPaths
+        extensionsToCheck: extensionsToCheck
+
+        # Relative paths are already resolved by this point
+        allowRelativeLookupWithoutPrefix: false
+
+      if not addedDeps[resolvedPath]?
+        deps.push resolvedPath
+        addedDeps[resolvedPath] = true
+
+    deps
+
 
   # Recurse a tree from the passed in node, changing the extention as we go.
   # Will stop recursing as soon as it hits a part of the tree that has already
