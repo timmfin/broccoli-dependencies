@@ -42,7 +42,7 @@ path = require('path')
 #     <script src="/common_assets/static-2.110/js/core/future-jquery.js" type="text/javascript"></script>
 #     <script src="/common_assets/static-2.110/js/core/htmlEscape.js" type="text/javascript"></script>
 #     <script src="/common_assets/static-2.110/js/core/isElement.js" type="text/javascript"></script>
-#     <script src="/common_assets/static-2.110/js/core/index.js" type="text/javascript"></script>
+#     <script src ="/common_assets/static-2.110/js/core/index.js" type="text/javascript"></script>
 #     <!-- End common_assets/static-2.110/js/core/index.js -->
 #     <script src="/style_guide/static/js/head/core.js" type="text/javascript"></script>
 #     <!-- End style_guide/static/js/head/core.js -->
@@ -68,6 +68,7 @@ path = require('path')
 
 dependenciesAsHTML = (tree, options = {}) ->
   formatValue = options.formatValue ? (v) -> v
+  filterFunc = options.filter
 
   if not options.expandedDebugMode
     htmlToIncludeDep(this, tree.relativePath)
@@ -75,15 +76,18 @@ dependenciesAsHTML = (tree, options = {}) ->
     dependenciesHTMLContent = []
 
     tree.traverseByType options.dependencyType, (node, visitChildren, depth) ->
-      val = formatValue(node.relativePath)
-      numSprocketsDeps = node.childrenForType(options.dependencyType).length
+      if not filterFunc? or filterFunc(node) is true
+        val = formatValue(node.relativePath)
+        numSprocketsDeps = node.childrenForType(options.dependencyType).length
 
-      dependenciesHTMLContent.push preIncludeComment(node, options.dependencyType, val, depth) if numSprocketsDeps > 0
+        dependenciesHTMLContent.push preIncludeComment(node, options.dependencyType, val, depth) if numSprocketsDeps > 0
 
-      visitChildren()
+        visitChildren()
 
-      dependenciesHTMLContent.push htmlToIncludeDep(node, options.dependencyType, val)
-      dependenciesHTMLContent.push postIncludeComment(node, options.dependencyType, val) if numSprocketsDeps > 0
+        dependenciesHTMLContent.push htmlToIncludeDep(node, options.dependencyType, val)
+        dependenciesHTMLContent.push postIncludeComment(node, options.dependencyType, val) if numSprocketsDeps > 0
+      else
+        console.log "Filtering out #{node.relativePath} from the expanded HTML output"
 
     dependenciesHTMLContent.join('\n').replace(/\n\n\n/g, '\n\n').replace(/^\n/, '')
 
