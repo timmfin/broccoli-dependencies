@@ -3,6 +3,7 @@ require('coffee-script/register');
 module.exports = {
   DependenciesCache: require('./dependencies-cache'),
 
+  CalculateDependenciesFilter: require('./calculate-dependencies'),
   CopyDependenciesFilter: require('./copy-dependencies'),
 
   BaseResolver: require('./base-resolver'),

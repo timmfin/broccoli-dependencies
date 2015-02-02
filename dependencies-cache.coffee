@@ -1,3 +1,5 @@
+_ = require('lodash')
+
 
 class DependenciesCache
   constructor: ->
@@ -13,15 +15,23 @@ class DependenciesCache
     # Cache under both the source extension and processed extension
     @treeCache[tree.relativePath] = tree
 
-    if tree.sourceRelativePath? and tree.relativePath isnt tree.sourceRelativePath
-      @treeCache[tree.sourceRelativePath] = tree
+    if tree.value.sourceRelativePath? and tree.relativePath isnt tree.value.sourceRelativePath
+      @treeCache[tree.value.sourceRelativePath] = tree
 
   dependencyListForFile: (relativePath) ->
     if @listCache[relativePath]?
       @listCache[relativePath]
     else
-      tree = @treeCache[relativePath]
+      tree = @dependencyTreeForFile(relativePath)
       @listCache[relativePath] = tree.listOfAllDependencies()
+
+  allStoredPaths: ->
+    # Hmm, "stored" is kinda confusing... why only the relativePaths and not the sourcePaths too?
+    # (for precompiled files that change extensions)
+    _.unique (tree.relativePath for file, tree of @treeCache)
+
+  anyPathsWithPrefix: (prefix) ->
+    _.unique (file for file, tree of @treeCache when file.indexOf(prefix) is 0)
 
   debugPrint: (callback) ->
     console.log 'Dependencies cache\n'

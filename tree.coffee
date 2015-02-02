@@ -149,7 +149,7 @@ class TypedChildrenNode extends TreeNode
     callback node, visitChildren, depth
 
 
-# Extends and customizes TreeNode for depdnency-specific info
+# Extends and customizes TreeNode for dependency-specific info
 class DependencyNode extends TypedChildrenNode
   createGetter @::, 'relativePath', -> @value.relativePath
   createGetter @::, 'srcDir', -> @value.srcDir

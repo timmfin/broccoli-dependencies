@@ -28,7 +28,7 @@ class CopyDependenciesFilter extends Writer
     # Make sure the broccoli-caching-writer constructor is called
     Writer.call(this, inputTree, options)
 
-    @inputTree = inputTree
+    @inputtree = inputtree
     @options = options
 
     @multiResolver = new MultiResolver options
@@ -48,24 +48,40 @@ class CopyDependenciesFilter extends Writer
   updateCache: (srcDir, destDir) ->
     # Ensure that we re-build dependency trees for every re-build (and other
     # per-run caches)
-    @multiResolver.dependencyCache?.clearAll()
+    #
+    # TODO, figure out a way to clear only if someone else has not already cleared
+    # the dep cache during this build run
+    #
+    # @multiResolver.dependencyCache?.clearAll()
+
     @copiedDependencies = {}
 
     walkSync(srcDir).map (relativePath) =>
-      outputPath = @getDestFilePath(relativePath)
-      destPath = destDir + '/' + (outputPath or relativePath)
+      isDirectory = relativePath.slice(-1) == '/'
+      outputPath  = @getDestFilePath(relativePath)
+      destPath    = destDir + '/' + (outputPath or relativePath)
 
-      # If this is a file we want to process (getDestFilePath checks if it matches
-      # any of the @extensions that came from @multiResolver)
-      if outputPath
-        @processFile(srcDir, destDir, relativePath)
+      shouldBeProcessed = @options.includedDirs? and @isIncludedPath(relativePath)
 
-      # If this is a directory, make sure that it exists in the destination. Otherwise
-      # always copy across the source file, even if it shouldn't be processed for deps.
-      if relativePath.slice(-1) == '/'
+      # If this is a directory make sure that it exists in the destination.
+      if isDirectory
         mkdirp.sync destPath
       else
+        # If this is a file we want to process (getDestFilePath checks if it matches
+        # any of the @extensions that came from @multiResolver)
+        if outputPath and shouldBeProcessed
+          @processFile(srcDir, destDir, relativePath)
+
+        # always copy across the source file, even if it shouldn't be processed for deps.
         helpers.copyPreserveSync(srcDir + '/' + relativePath, destPath)
+
+  isIncludedPath: (relativePath) ->
+    return true if not @options.includedDirs?
+
+    for includedDir in @options.includedDirs
+      return true if relativePath.indexOf(includedDir) is 0
+
+    false
 
   processFile: (srcDir, destDir, relativePath) ->
     { dependenciesToCopy, depTree } = @processDependenciesToCopy(relativePath, srcDir, destDir)
@@ -76,6 +92,8 @@ class CopyDependenciesFilter extends Writer
 
     if dependenciesToCopy.length > 0
       console.log "Copying all missing dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
+
+      console.log "dependenciesToCopy", dependenciesToCopy
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
       for depPath in dependenciesToCopy
