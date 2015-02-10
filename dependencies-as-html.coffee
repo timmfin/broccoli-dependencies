@@ -71,7 +71,7 @@ dependenciesAsHTML = (tree, options = {}) ->
   filterFunc = options.filter
 
   if not options.expandedDebugMode
-    htmlToIncludeDep(this, tree.relativePath)
+    htmlToIncludeDep(this, options.dependencyType, tree.relativePath)
   else
     dependenciesHTMLContent = []
 
