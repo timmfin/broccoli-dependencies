@@ -1,5 +1,5 @@
 _ = require('lodash')
-
+path = require('path')
 
 class DependenciesCache
   constructor: ->
@@ -45,7 +45,7 @@ class DependenciesCache
     @listCache = {}
 
 
-{ convertFromPreprocessorExtension, extractExtension, resolvePath } = require('bender-broccoli-utils')
+{ convertFromPreprocessorExtension, extractExtension, resolveDirAndPath } = require('bender-broccoli-utils')
 
 
 # Ensure that dependendencies are accessesed/followed by the finalized
@@ -64,6 +64,8 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
     super tree
 
   listOfAllResolvedDependencyPaths: (relativePath, options={}) ->
+    options.relative ?= false
+
     depTree = @dependencyTreeForFile(relativePath)
     return undefined unless depTree?
 
@@ -85,12 +87,17 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
       # case it has been removed from the tree at some point)
       # loadPaths = [].concat(options.loadPaths).concat([node.value.srcDir])
 
-      resolvedPath = resolvePath node.value.relativePath,
+      [resolvedDir, resolvedPath] = resolveDirAndPath node.value.relativePath,
         loadPaths: options.loadPaths
         extensionsToCheck: extensionsToCheck
 
         # Relative paths are already resolved by this point
         allowRelativeLookupWithoutPrefix: false
+
+      if options.relative is true
+        resolvedPath = resolvedPath
+      else
+        resolvedPath = path.join resolvedDir, resolvedPath
 
       if not addedDeps[resolvedPath]?
         deps.push resolvedPath
