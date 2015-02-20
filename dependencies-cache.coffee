@@ -67,8 +67,13 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
     options.relative ?= false
 
     depTree = @dependencyTreeForFile(relativePath)
-    return undefined unless depTree?
 
+    if depTree?
+      @_allResolvedDepsFromTree depTree, options
+    else
+      undefined
+
+  _allResolvedDepsFromTree: (depTree, options={}) ->
     deps = []
     addedDeps = {}
 
@@ -104,6 +109,44 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
         addedDeps[resolvedPath] = true
 
     deps
+
+  listOfAllResolvedDependencyPathsMulti: (relativePaths, options={}) ->
+    disconnectedTreeSet = []
+    allResolvedDeps = []
+
+    # Gather up the "disconnected" depTrees
+    for relativePath in relativePaths
+      newDepTree = @dependencyTreeForFile(relativePath)
+      disconnectedTreeSet = @_mergeIntoTreeSet(disconnectedTreeSet, newDepTree) if newDepTree?
+
+    # Then resolve all the depTree's to a list of files
+    allResolvedDeps = for depTree in disconnectedTreeSet
+      @_allResolvedDepsFromTree(depTree, options)
+
+    _.flatten allResolvedDeps
+
+
+  # Helper to add to and maintain a set of disconnected trees. Really should be
+  # a TreeSet type with set like methods
+  _mergeIntoTreeSet: (treeSet, newTree) ->
+    return unless newTree?
+
+    if treeSet.length is 0
+      return [newTree]
+    else
+      # First, check if the new tree is contained inside any existing tree
+      # (and if so, exit... no need to add to the set)
+      for existingTree in treeSet
+        return treeSet if existingTree.hasDescendent(newTree)
+
+      # Then check the opposite, if the new tree contains any existing trees
+      # (and if so, remove that existing tree from the set)
+      treesToRemove = []
+
+      for existingTree in treeSet
+        treesToRemove.push(existingTree) if existingTree.hasAncestor(newTree)
+
+      return _.difference(treeSet, treesToRemove)
 
 
   # Recurse a tree from the passed in node, changing the extention as we go.

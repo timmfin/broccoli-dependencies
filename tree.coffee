@@ -77,6 +77,20 @@ class TreeNode
       console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
       visitChildren()
 
+  hasDescendent: (otherTree) ->
+    result = false
+
+    @traverse (node, visitChildren) ->
+      if node is otherTree
+        result = true
+      else
+        visitChildren()
+
+    result
+
+  hasAncestor: (otherTree) ->
+    otherTree.hasDescendent(this)
+
   # Helper for traverse
   @visitNode: (node, callback, depth = 0) ->
     children = node.children
