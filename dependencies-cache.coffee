@@ -77,8 +77,10 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
     deps = []
     addedDeps = {}
 
-    depTree.traverse (node, visitChildren) ->
+    depTree.traverse (node, visitChildren, depth) ->
       visitChildren()
+      return if depth is 0 and options.ignoreSelf
+
       ext = extractExtension(node.value.relativePath)
       extensionsToCheck = [ext]
 
@@ -92,21 +94,24 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
       # case it has been removed from the tree at some point)
       # loadPaths = [].concat(options.loadPaths).concat([node.value.srcDir])
 
-      [resolvedDir, resolvedPath] = resolveDirAndPath node.value.relativePath,
+      [resolvedDir, resolvedRelativePath] = resolveDirAndPath node.value.relativePath,
         loadPaths: options.loadPaths
         extensionsToCheck: extensionsToCheck
 
         # Relative paths are already resolved by this point
         allowRelativeLookupWithoutPrefix: false
 
-      if options.relative is true
-        resolvedPath = resolvedPath
+      if options.relativePlusDirObject is true
+        toAdd = { resolvedDir, resolvedRelativePath }
+        key = path.join resolvedDir, resolvedRelativePath
+      else if options.relative is true
+        toAdd = key = resolvedRelativePath
       else
-        resolvedPath = path.join resolvedDir, resolvedPath
+        toAdd = key = path.join resolvedDir, resolvedRelativePath
 
-      if not addedDeps[resolvedPath]?
-        deps.push resolvedPath
-        addedDeps[resolvedPath] = true
+      if not addedDeps[key]?
+        deps.push toAdd
+        addedDeps[key] = true
 
     deps
 
@@ -123,7 +128,7 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
     allResolvedDeps = for depTree in disconnectedTreeSet
       @_allResolvedDepsFromTree(depTree, options)
 
-    _.flatten allResolvedDeps
+    _.flatten allResolvedDeps, false
 
 
   # Helper to add to and maintain a set of disconnected trees. Really should be
