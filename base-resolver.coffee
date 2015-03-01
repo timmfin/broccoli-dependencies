@@ -53,6 +53,10 @@ class BaseResolver
 
     resolveDirAndPath inputPath, options
 
+  resolvePath: (inputPath, options = {}) ->
+    [dir, relPath] = @resolveDirAndPath inputPath, options
+    dir + '/' + relativePath
+
 
 
   # Given a potential dependency path, return an array of extensions that are valid.
