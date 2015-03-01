@@ -1,6 +1,7 @@
 'use strict'
 
 walkSync  = require('walk-sync')
+{ Stopwatch } = require('bender-broccoli-utils')
 
 MultiResolver = require('./multi-resolver')
 
@@ -22,6 +23,7 @@ class CalculateDependenciesFilter
 
   read: (readTree) ->
     readTree(@inputTree).then (srcDir) =>
+      stopwatch = new Stopwatch().start()
 
       # Ensure that we re-build dependency trees for every re-build (and other
       # per-run caches)
@@ -53,6 +55,8 @@ class CalculateDependenciesFilter
 
           depTreesInTopLevelDir = 0
           currentTopLevelDir = relativePath
+
+      console.log "Took #{stopwatch.stop().prettyOut()} to calculate dependencies"
 
       # Always return the input, since this is a no-op filter
       srcDir
