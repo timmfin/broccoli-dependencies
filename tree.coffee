@@ -182,23 +182,27 @@ class DependencyNode extends TypedChildrenNode
 
     deps
 
-  listOfAllDependencies: (formatValue) ->
-    @listOfAllDependenciesForType undefined, formatValue
+  listOfAllDependencies: (options) ->
+    @listOfAllDependenciesForType undefined, options
 
-  listOfAllDependenciesForType: (type, formatValue) ->
-    formatValue ?= (v) -> v
+  listOfAllDependenciesForType: (type, options = {}) ->
+    formatValue = options.formatValue ? (v) -> v.relativePath
     deps = []
     addedDeps = {}
 
-    @traverseByType type, (node, visitChildren) ->
+    @traverseByType type, (node, visitChildren, depth) ->
       visitChildren()
-      val = formatValue(node.relativePath)
 
-      if not addedDeps[val]?
-        deps.push val
-        addedDeps[val] = true
+      if depth > 0 or not options.ignoreSelf
+        val = formatValue(node.value)
+
+        if not addedDeps[val]?
+          deps.push val
+          addedDeps[val] = true
 
     deps
+
+  @.EmptyTree = Object.freeze(new @())
 
 
 

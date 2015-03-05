@@ -60,7 +60,7 @@ class BaseResolver
 
 
   # Given a potential dependency path, return an array of extensions that are valid.
-  # For example, if using a preprocessor, a depenency path to a Javascript file
+  # For example, if using a preprocessor, a dependency path to a Javascript file
   # (e.g. `dir/file.js`) may want to additionally check and look and see if if there is a
   # Coffeescript file (e.g. `dir/file.coffee`). Override this to cutomize what
   # are valid extensions for your dependency type.

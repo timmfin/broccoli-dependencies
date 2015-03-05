@@ -7,17 +7,19 @@ mkdirp    = require('mkdirp')
 pluralize = require('pluralize')
 walkSync  = require('walk-sync')
 Writer    = require('broccoli-caching-writer')
-{ stripBaseDirectory } = require('bender-broccoli-utils')
 
-MultiResolver = require('./multi-resolver')
+{ compact: filterFalseValues, flatten } = require('lodash')
+{ stripBaseDirectory, resolveDirAndPath, extractExtension } = require('bender-broccoli-utils')
+
+{ EmptyTree } = require('./tree')
 
 
-# Follows the dependency tree from Sprockets `//= require ...` directives, and
-# copies all of those dependencies into the broccoli "working dir" if they are not
-# already there.
+# Follows the dependency tree created by your configured resolvers (Sass, sprockets
+# directives, jade, etc), and copies all of those dependencies into the broccoli
+# "working dir" if they are not already there.
 #
-# This is necessary to ensure that any `require`-ed files that need preprocessing
-# (like Sass or Coffeescript) are included before the rest of the build steps.
+# This is necessary to ensure that any dependent files are included before the
+# rest of the build steps.
 
 class CopyDependenciesFilter extends Writer
 
@@ -28,32 +30,21 @@ class CopyDependenciesFilter extends Writer
     # Make sure the broccoli-caching-writer constructor is called
     Writer.call(this, inputTree, options)
 
-    @inputtree = inputtree
+    @inputTree = inputTree
     @options = options
-
-    @multiResolver = new MultiResolver options
-    @extensions = @multiResolver.allResolverExtensions()
 
     # Ensure that only extensions that are possible dependencies can cause a rebuild
     # (only if `@filterFromCache.include` isn't already specified)
-    if @filterFromCache.include.length is 0
+    if @filterFromCache.include.length is 0 and @options.extensions?
       @filterFromCache.include.push ///
           .*
-          \.(?: #{@extensions.join('|')} )
+          \.(?: #{@options.extensions.join('|')} )
           $
         ///
 
     @copiedDependencies = {}
 
   updateCache: (srcDir, destDir) ->
-    # Ensure that we re-build dependency trees for every re-build (and other
-    # per-run caches)
-    #
-    # TODO, figure out a way to clear only if someone else has not already cleared
-    # the dep cache during this build run
-    #
-    # @multiResolver.dependencyCache?.clearAll()
-
     @copiedDependencies = {}
 
     walkSync(srcDir).map (relativePath) =>
@@ -61,14 +52,14 @@ class CopyDependenciesFilter extends Writer
       outputPath  = @getDestFilePath(relativePath)
       destPath    = destDir + '/' + (outputPath or relativePath)
 
-      shouldBeProcessed = @options.includedDirs? and @isIncludedPath(relativePath)
+      shouldBeProcessed = @isIncludedPath(relativePath)
 
       # If this is a directory make sure that it exists in the destination.
       if isDirectory
         mkdirp.sync destPath
       else
         # If this is a file we want to process (getDestFilePath checks if it matches
-        # any of the @extensions that came from @multiResolver)
+        # any of the `@options.extensions` configured)
         if outputPath and shouldBeProcessed
           @processFile(srcDir, destDir, relativePath)
 
@@ -91,51 +82,80 @@ class CopyDependenciesFilter extends Writer
     numDepsInTree = depTree.size() - 1
 
     if dependenciesToCopy.length > 0
-      console.log "Copying all missing dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
-
-      console.log "dependenciesToCopy", dependenciesToCopy
+      console.log "Copying all external dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
-      for depPath in dependenciesToCopy
-        relativeDepPath = stripBaseDirectory depPath, @options.loadPaths
-        copyDestination = destDir + '/' + relativeDepPath
+      for { resolvedDir, resolvedRelativePath } in dependenciesToCopy
+        sourcePath = resolvedDir + '/' + resolvedRelativePath
+        copyDestination = destDir + '/' + resolvedRelativePath
 
         mkdirp.sync(path.dirname(copyDestination))
-        helpers.copyPreserveSync(depPath, copyDestination)
+        helpers.copyPreserveSync(sourcePath, copyDestination)
 
-        relativeDepPath
+        resolvedRelativePath
 
     # else if numDepsInTree > 0
     #   console.log "Found #{numDepsInTree} #{pluralize('deps', numDepsInTree)} for #{relativePath}, but #{if numDepsInTree is 1 then 'it' else 'all'} already #{if numDepsInTree is 1 then 'exists' else 'exist'} in the broccoli tree"
 
   processDependenciesToCopy: (relativePath, srcDir) ->
-    depTree = @multiResolver.findDependencies(relativePath, srcDir)
-    allAbsoluteDependencyPaths = depTree.listOfAllOriginalAbsoluteDependencies()
+    baseDirs = [srcDir].concat(@passedLoadPaths())
 
-    # Exclude paths that already exist in the srcDir or already have been copied
-    dependenciesToCopy = allAbsoluteDependencyPaths.filter (p) =>
-      pathInsideSrcDir = p.indexOf(srcDir) is 0
+    # TODO fail early if @passedLoadPaths is empty?
 
-      if not pathInsideSrcDir and not @copiedDependencies[p] and @options.filter?(p) isnt false
-        @copiedDependencies[p] = true
-        true
-      else
-        false
+    depTree = @dependencyCache.dependencyTreeForFile(relativePath)
 
-    # Return all dependencies of this file _and_ only the files that we needed to copy
-    {
-      dependenciesToCopy
-      depTree
-    }
+    if not depTree?
+      {
+        dependenciesToCopy: []
+        depTree: EmptyTree
+      }
+    else
+      allDependencyPaths = depTree.listOfAllDependencies
+        ignoreSelf: true
+        formatValue: (v) ->
+          v.sourceRelativePath
+
+      # Exclude paths that already exist in the srcDir or already have been copied
+      dependenciesToCopyAsObjs = for p in allDependencyPaths
+        extension = extractExtension(p)
+
+        resolvedDeps = resolveDirAndPath p,
+          filename: srcDir + '/' + relativePath
+          loadPaths: baseDirs
+          extensionsToCheck: @dependencyCache.allPossibleCompiledExtensionsFor(extension)
+          allowMultipleResultsFromSameDirectory: true
+
+        filteredResolvedDeps = for [resolvedDir, resolvedRelativePath] in resolvedDeps
+          if resolvedRelativePath is 'ExampleStaticBase/static/html/base.js'
+            undefined
+          else if resolvedDir isnt srcDir and not @copiedDependencies[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
+            @copiedDependencies[resolvedRelativePath] = true
+            { resolvedDir, resolvedRelativePath }
+          else
+            undefined
+
+        filteredResolvedDeps
+
+      # Return all dependencies of this file _and_ only the files that we needed to copy
+      {
+        dependenciesToCopy: filterFalseValues(flatten(dependenciesToCopyAsObjs))
+        depTree
+      }
 
   getDestFilePath: (relativePath) ->
-    for ext in @extensions
-      if relativePath.slice(-ext.length - 1) == '.' + ext
-        return relativePath
+    if @options.extensions?.length > 0
+      for ext in @options.extensions
+        if relativePath.slice(-ext.length - 1) == '.' + ext
+          return relativePath
 
-    # Return undefined to ignore relativePath
-    return undefined
+      # Return undefined to ignore relativePath
+      undefined
+    else
+      relativePath
 
+  passedLoadPaths: ->
+    # options.loadPaths might be a function (HACK?)
+    @options.loadPaths?() ? @options.loadPaths ? []
 
 
 module.exports = CopyDependenciesFilter

@@ -55,6 +55,9 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
   constructor: (@options = {}) ->
     super
 
+    # A bit ghetto (function instead of saved var?)
+    @preprocessorsByExtensionInverted = @_invertPreprocessorsByExtensionMap(@options.preprocessorsByExtension)
+
     # Override @options.preprocessorsByExtension to add/remove preprocessors
     @convertFromPreprocessorExtension = convertFromPreprocessorExtension.curry
       preprocessorsByExtension: @options.preprocessorsByExtension
@@ -169,6 +172,38 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
         @convertPreprocessorExtensionForNode child
 
 
+  _invertPreprocessorsByExtensionMap: (preprocessorsByExtension) ->
+    result = Object.create(null)
+
+    for origExt, subMap of preprocessorsByExtension
+      for processedExt in Object.keys(subMap)
+        result[processedExt] ?= Object.create(null)
+        result[processedExt][origExt] = true
+
+    result
+
+  # Helpers
+
+  allPossiblePreprocessorExtensionsFor: (ext) ->
+
+    # Trim leading dot if provided
+    ext = ext[1..] if ext?[0] is '.'
+
+    if @options.preprocessorsByExtension?[ext]?
+      Object.keys(@options.preprocessorsByExtension[ext]).concat([ext])
+    else
+      [ext]
+
+  allPossibleCompiledExtensionsFor: (ext) ->
+
+    # Trim leading dot if provided
+    ext = ext[1..] if ext?[0] is '.'
+
+    if @preprocessorsByExtensionInverted?[ext]?
+      Object.keys(@preprocessorsByExtensionInverted[ext]).concat([ext])
+    else
+      [ext]
+
   # Try super methods with out without preprocessor conversion
 
   wrappedMethods = [
@@ -189,6 +224,7 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
           DependenciesCache::[methodName].call(this, processedPath)
         else
           result
+
 
 
 
