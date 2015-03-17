@@ -31,7 +31,7 @@ class DependenciesCache
     _.unique (tree.relativePath for file, tree of @treeCache)
 
   anyPathsWithPrefix: (prefix) ->
-    _.unique (file for file, tree of @treeCache when file.indexOf(prefix) is 0)
+    @pathPrefixCache[prefix] ?= _.unique (file for file, tree of @treeCache when file.indexOf(prefix) is 0)
 
   debugPrint: (callback) ->
     console.log 'Dependencies cache\n'
@@ -40,9 +40,11 @@ class DependenciesCache
       tree.debugPrint(callback)
       console.log ''
 
+  # Cleared between builds
   clearAll: ->
     @treeCache = {}
     @listCache = {}
+    @pathPrefixCache = {}
 
 
 { convertFromPreprocessorExtension, extractExtension, resolveDirAndPath } = require('bender-broccoli-utils')
