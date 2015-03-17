@@ -6,10 +6,11 @@ helpers   = require('broccoli-kitchen-sink-helpers')
 mkdirp    = require('mkdirp')
 pluralize = require('pluralize')
 walkSync  = require('walk-sync')
-Writer    = require('broccoli-caching-writer')
+
+CachingWriter = require('broccoli-caching-writer')
 
 { compact: filterFalseValues, flatten } = require('lodash')
-{ stripBaseDirectory, resolveDirAndPath, extractExtension } = require('bender-broccoli-utils')
+{ stripBaseDirectory, resolveDirAndPath, extractExtension, Stopwatch } = require('bender-broccoli-utils')
 
 { EmptyTree } = require('./tree')
 
@@ -21,17 +22,19 @@ Writer    = require('broccoli-caching-writer')
 # This is necessary to ensure that any dependent files are included before the
 # rest of the build steps.
 
-class CopyDependenciesFilter extends Writer
+class CopyDependenciesFilter extends CachingWriter
 
   constructor: (inputTree, options = {}) ->
     if not (this instanceof CopyDependenciesFilter)
       return new CopyDependenciesFilter(inputTree, options)
 
-    # Make sure the broccoli-caching-writer constructor is called
-    Writer.call(this, inputTree, options)
+    # CoreObject (used inside CachingWriter) doesn't like being called directly
+    CachingWriter.prototype.init.call this, [inputTree], { filterFromCache: options.filterFromCache }
 
     @inputTree = inputTree
     @options = options
+
+    { @dependencyCache } = @options
 
     # Ensure that only extensions that are possible dependencies can cause a rebuild
     # (only if `@filterFromCache.include` isn't already specified)
@@ -44,10 +47,17 @@ class CopyDependenciesFilter extends Writer
 
     @copiedDependencies = {}
 
-  updateCache: (srcDir, destDir) ->
+  updateCache: (srcDirs, destDir) ->
+    srcDir = srcDirs[0]
     @copiedDependencies = {}
 
-    walkSync(srcDir).map (relativePath) =>
+    stopwatch = Stopwatch().start()
+    processStopwatch = null
+
+    walkedMap = walkSync(srcDir)
+    console.log "CopyDepsFilter walkSynctime: #{stopwatch.prettyOutSplit()}"
+
+    walkedMap.map (relativePath) =>
       isDirectory = relativePath.slice(-1) == '/'
       outputPath  = @getDestFilePath(relativePath)
       destPath    = destDir + '/' + (outputPath or relativePath)
@@ -61,10 +71,14 @@ class CopyDependenciesFilter extends Writer
         # If this is a file we want to process (getDestFilePath checks if it matches
         # any of the `@options.extensions` configured)
         if outputPath and shouldBeProcessed
+          processStopwatch = Stopwatch().start() unless processStopwatch
           @processFile(srcDir, destDir, relativePath)
+          console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap()}"
 
         # always copy across the source file, even if it shouldn't be processed for deps.
         helpers.copyPreserveSync(srcDir + '/' + relativePath, destPath)
+
+    console.log "CopyDepsFilter time: #{stopwatch.stop().prettyOut()}"
 
   isIncludedPath: (relativePath) ->
     return true if not @options.includedDirs?
