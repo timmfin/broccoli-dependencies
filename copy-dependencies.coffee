@@ -126,9 +126,7 @@ class CopyDependenciesFilter extends Writer
           allowMultipleResultsFromSameDirectory: true
 
         filteredResolvedDeps = for [resolvedDir, resolvedRelativePath] in resolvedDeps
-          if resolvedRelativePath is 'ExampleStaticBase/static/html/base.js'
-            undefined
-          else if resolvedDir isnt srcDir and not @copiedDependencies[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
+          if resolvedDir isnt srcDir and not @copiedDependencies[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
             @copiedDependencies[resolvedRelativePath] = true
             { resolvedDir, resolvedRelativePath }
           else
