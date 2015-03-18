@@ -73,7 +73,7 @@ class CopyDependenciesFilter extends CachingWriter
         if outputPath and shouldBeProcessed
           processStopwatch = Stopwatch().start() unless processStopwatch
           @processFile(srcDir, destDir, relativePath)
-          console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap()}"
+          # console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap()}"
 
         # always copy across the source file, even if it shouldn't be processed for deps.
         helpers.copyPreserveSync(srcDir + '/' + relativePath, destPath)
