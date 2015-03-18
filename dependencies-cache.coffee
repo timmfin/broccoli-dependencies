@@ -18,12 +18,13 @@ class DependenciesCache
     if tree.value.sourceRelativePath? and tree.relativePath isnt tree.value.sourceRelativePath
       @treeCache[tree.value.sourceRelativePath] = tree
 
-  dependencyListForFile: (relativePath) ->
-    if @listCache[relativePath]?
+  dependencyListForFile: (relativePath, options = undefined) ->
+    # For now, don't try to cache calls with specific options (like ignoreSelf or formatValue)
+    if @listCache[relativePath]? and options is undefined
       @listCache[relativePath]
     else
       tree = @dependencyTreeForFile(relativePath)
-      @listCache[relativePath] = tree.listOfAllDependencies()
+      @listCache[relativePath] = tree.listOfAllDependencies(options)
 
   allStoredPaths: ->
     # Hmm, "stored" is kinda confusing... why only the relativePaths and not the sourcePaths too?
@@ -216,14 +217,14 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
 
   for methodName in wrappedMethods
     do (methodName) ->
-      PreprocessorAwareDepenenciesCache::[methodName] = (relativePath) ->
-        result = DependenciesCache::[methodName].call(this, relativePath)
+      PreprocessorAwareDepenenciesCache::[methodName] = (relativePath, otherArgs...) ->
+        result = DependenciesCache::[methodName].call(this, relativePath, otherArgs...)
         return result if result
 
         processedPath = @convertFromPreprocessorExtension(relativePath)
 
         if processedPath != relativePath
-          DependenciesCache::[methodName].call(this, processedPath)
+          DependenciesCache::[methodName].call(this, processedPath, otherArgs...)
         else
           result
 
