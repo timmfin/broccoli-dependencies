@@ -1,15 +1,17 @@
 'use strict'
 
-path      = require('path')
-fs        = require('fs')
-helpers   = require('broccoli-kitchen-sink-helpers')
-mkdirp    = require('mkdirp')
-pluralize = require('pluralize')
-walkSync  = require('walk-sync')
-
+fs            = require('fs')
+path          = require('path')
+RSVP          = require('RSVP')
+async         = require('async')
+mkdirp        = require('mkdirp')
+helpers       = require('broccoli-kitchen-sink-helpers')
+pluralize     = require('pluralize')
+walkSync      = require('walk-sync')
+copyPreserve  = require('copy-dereference')
 CachingWriter = require('broccoli-caching-writer')
 
-{ compact: filterFalseValues, flatten } = require('lodash')
+{ compact: filterFalseValues, flatten, merge } = require('lodash')
 { stripBaseDirectory, resolveDirAndPath, extractExtension, Stopwatch } = require('bender-broccoli-utils')
 
 { EmptyTree } = require('./tree')
@@ -45,11 +47,20 @@ class CopyDependenciesFilter extends CachingWriter
           $
         ///
 
-    @copiedDependencies = {}
+
+  # Max IO operations to allow in parallel (for async.mapLimit)
+  MAX_PARALLEL: 100
 
   updateCache: (srcDirs, destDir) ->
     srcDir = srcDirs[0]
-    @copiedDependencies = {}
+
+    @allRelativePathsToCopy = Object.create(null)
+    @allResolvedPathsToCopy = Object.create(null)
+    @otherFilesToCopy = Object.create(null)
+    @allDirectoriesToCreate = Object.create(null)
+
+    @numFilesProcessed = 0
+    @numFilesWalked = 0
 
     stopwatch = Stopwatch().start()
     processStopwatch = null
@@ -68,17 +79,53 @@ class CopyDependenciesFilter extends CachingWriter
       if isDirectory
         mkdirp.sync destPath
       else
+        @numFilesWalked += 1
+
         # If this is a file we want to process (getDestFilePath checks if it matches
         # any of the `@options.extensions` configured)
         if outputPath and shouldBeProcessed
+          @numFilesProcessed += 1
           processStopwatch = Stopwatch().start() unless processStopwatch
           @processFile(srcDir, destDir, relativePath)
           # console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap()}"
 
         # always copy across the source file, even if it shouldn't be processed for deps.
-        helpers.copyPreserveSync(srcDir + '/' + relativePath, destPath)
+        @otherFilesToCopy[srcDir + '/' + relativePath] = destPath
+        # copyPreserve.sync(srcDir + '/' + relativePath, destPath)
 
-    console.log "CopyDepsFilter time: #{stopwatch.stop().prettyOut()}"
+
+    # Actually do all the copies and dir creation asynchronously
+    srcDestTuples = for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
+      [src, dest]
+
+    new RSVP.Promise (resolve, reject) =>
+
+      # Using async, mainly so we don't need to allocate so many promises
+      async.mapLimit Object.keys(@allDirectoriesToCreate), @MAX_PARALLEL, mkdirp, (err, results) =>
+        reject(err) if err?
+
+        copyPreserveWithTuple = ([src, dest], callback) ->
+          copyPreserve src, dest, callback
+
+        # async.mapSeries srcDestTuples, copyPreserveWithTuple, (err, results) =>
+        async.mapLimit srcDestTuples, @MAX_PARALLEL, copyPreserveWithTuple, (err, results) =>
+          reject(err) if err?
+
+          numFilesCopied = Object.keys(@allRelativePathsToCopy).length
+
+          console.log """
+            CopyDepsFilter time: #{stopwatch.stop().prettyOut()}
+              - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
+              - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
+              - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
+
+          """
+
+          resolve()
+
+
+
+
 
   isIncludedPath: (relativePath) ->
     return true if not @options.includedDirs?
@@ -103,8 +150,11 @@ class CopyDependenciesFilter extends CachingWriter
         sourcePath = resolvedDir + '/' + resolvedRelativePath
         copyDestination = destDir + '/' + resolvedRelativePath
 
-        mkdirp.sync(path.dirname(copyDestination))
-        helpers.copyPreserveSync(sourcePath, copyDestination)
+        @allDirectoriesToCreate[path.dirname(copyDestination)] = true
+        @allResolvedPathsToCopy[sourcePath] = copyDestination
+
+        # mkdirp.sync(path.dirname(copyDestination))
+        # copyPreserve.sync(sourcePath, copyDestination)
 
         resolvedRelativePath
 
@@ -140,8 +190,8 @@ class CopyDependenciesFilter extends CachingWriter
           allowMultipleResultsFromSameDirectory: true
 
         filteredResolvedDeps = for [resolvedDir, resolvedRelativePath] in resolvedDeps
-          if resolvedDir isnt srcDir and not @copiedDependencies[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
-            @copiedDependencies[resolvedRelativePath] = true
+          if resolvedDir isnt srcDir and not @allRelativePathsToCopy[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
+            @allRelativePathsToCopy[resolvedRelativePath] = true
             { resolvedDir, resolvedRelativePath }
           else
             undefined

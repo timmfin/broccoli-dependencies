@@ -2,8 +2,10 @@
   "name": "broccoli-dependencies",
   "version": "0.0.1",
   "dependencies": {
+    "async": "^0.9.0",
     "bender-broccoli-utils": "git://github.com/timmfin/bender-broccoli-utils.git",
     "broccoli-caching-writer": "git+ssh://git@github.com/ember-cli/broccoli-caching-writer.git#6c72664f45969e5672ca0f9ae81708018d46fa63",
+    "node-copy-dereference": "git+ssh://git@github.com/timmfin/broccoli-dependencies.git#async-impl",
     "broccoli-kitchen-sink-helpers": "^0.2.4",
     "coffee-script": "^1.8.0",
     "lodash": "^2.4.1",
