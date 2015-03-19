@@ -94,34 +94,27 @@ class CopyDependenciesFilter extends CachingWriter
         # copyPreserve.sync(srcDir + '/' + relativePath, destPath)
 
 
-    # Actually do all the copies and dir creation asynchronously
-    srcDestTuples = for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
-      [src, dest]
+    # Batch up the copies and dir creation to the end (but still keeping sync
+    # because I measured and it doesn't make a difference)
 
-    new RSVP.Promise (resolve, reject) =>
+    for dirToCreate in Object.keys(@allDirectoriesToCreate)
+      mkdirp.sync dirToCreate
 
-      # Using async, mainly so we don't need to allocate so many promises
-      async.mapLimit Object.keys(@allDirectoriesToCreate), @MAX_PARALLEL, mkdirp, (err, results) =>
-        reject(err) if err?
+    copyStopwatch = Stopwatch().start()
 
-        copyPreserveWithTuple = ([src, dest], callback) ->
-          copyPreserve src, dest, callback
+    for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
+      copyPreserve.sync src, dest
 
-        # async.mapSeries srcDestTuples, copyPreserveWithTuple, (err, results) =>
-        async.mapLimit srcDestTuples, @MAX_PARALLEL, copyPreserveWithTuple, (err, results) =>
-          reject(err) if err?
+    numFilesCopied = Object.keys(@allRelativePathsToCopy).length
 
-          numFilesCopied = Object.keys(@allRelativePathsToCopy).length
+    console.log """
+      CopyDepsFilter time: #{stopwatch.stop().prettyOut()}
+        - Time to copy #{copyStopwatch.stop().prettyOut()}
+        - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
+        - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
+        - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
 
-          console.log """
-            CopyDepsFilter time: #{stopwatch.stop().prettyOut()}
-              - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
-              - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
-              - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
-
-          """
-
-          resolve()
+    """
 
 
 
