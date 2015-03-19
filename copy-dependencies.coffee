@@ -9,7 +9,7 @@ mkdirp        = require('mkdirp')
 helpers       = require('broccoli-kitchen-sink-helpers')
 pluralize     = require('pluralize')
 walkSync      = require('walk-sync')
-copyPreserve  = require('copy-dereference')
+symlinkOrCopy = require('symlink-or-copy')
 CachingWriter = require('broccoli-caching-writer')
 
 { compact: filterFalseValues, flatten, merge } = require('lodash')
@@ -103,7 +103,7 @@ class CopyDependenciesFilter extends CachingWriter
     copyStopwatch = Stopwatch().start()
 
     for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
-      copyPreserve.sync src, dest
+      symlinkOrCopy.sync src, dest
 
     numFilesCopied = Object.keys(@allRelativePathsToCopy).length
 

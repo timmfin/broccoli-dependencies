@@ -12,6 +12,7 @@
     "mkdirp": "^0.5.0",
     "node-copy-dereference": "git+ssh://git@github.com/timmfin/broccoli-dependencies.git#async-impl",
     "pluralize": "^1.0.1",
+    "symlink-or-copy": "^1.0.1",
     "walk-sync": "^0.1.3"
   }
 }
