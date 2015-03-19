@@ -91,7 +91,6 @@ class CopyDependenciesFilter extends CachingWriter
 
         # always copy across the source file, even if it shouldn't be processed for deps.
         @otherFilesToCopy[srcDir + '/' + relativePath] = destPath
-        # copyPreserve.sync(srcDir + '/' + relativePath, destPath)
 
 
     # Batch up the copies and dir creation to the end (but still keeping sync
@@ -145,9 +144,6 @@ class CopyDependenciesFilter extends CachingWriter
 
         @allDirectoriesToCreate[path.dirname(copyDestination)] = true
         @allResolvedPathsToCopy[sourcePath] = copyDestination
-
-        # mkdirp.sync(path.dirname(copyDestination))
-        # copyPreserve.sync(sourcePath, copyDestination)
 
         resolvedRelativePath
 
