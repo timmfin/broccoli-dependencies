@@ -1,6 +1,7 @@
 'use strict'
 
 fs            = require('fs')
+Set           = require('Set')
 path          = require('path')
 RSVP          = require('RSVP')
 async         = require('async')
@@ -57,7 +58,7 @@ class CopyDependenciesFilter extends CachingWriter
     @allRelativePathsToCopy = Object.create(null)
     @allResolvedPathsToCopy = Object.create(null)
     @otherFilesToCopy = Object.create(null)
-    @allDirectoriesToCreate = Object.create(null)
+    @allDirectoriesToCreate = new Set
 
     @numFilesProcessed = 0
     @numFilesWalked = 0
@@ -77,7 +78,7 @@ class CopyDependenciesFilter extends CachingWriter
 
       # If this is a directory make sure that it exists in the destination.
       if isDirectory
-        mkdirp.sync destPath
+        @allDirectoriesToCreate.add(destPath)
       else
         @numFilesWalked += 1
 
@@ -96,7 +97,7 @@ class CopyDependenciesFilter extends CachingWriter
     # Batch up the copies and dir creation to the end (but still keeping sync
     # because I measured and it doesn't make a difference)
 
-    for dirToCreate in Object.keys(@allDirectoriesToCreate)
+    for dirToCreate in @allDirectoriesToCreate.toArray()
       mkdirp.sync dirToCreate
 
     copyStopwatch = Stopwatch().start()
@@ -142,7 +143,7 @@ class CopyDependenciesFilter extends CachingWriter
         sourcePath = resolvedDir + '/' + resolvedRelativePath
         copyDestination = destDir + '/' + resolvedRelativePath
 
-        @allDirectoriesToCreate[path.dirname(copyDestination)] = true
+        @allDirectoriesToCreate.add(path.dirname(copyDestination))
         @allResolvedPathsToCopy[sourcePath] = copyDestination
 
         resolvedRelativePath
