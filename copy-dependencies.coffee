@@ -12,7 +12,7 @@ walkSync      = require('walk-sync')
 symlinkOrCopy = require('symlink-or-copy')
 CachingWriter = require('broccoli-caching-writer')
 
-{ compact: filterFalseValues, flatten, merge } = require('lodash')
+{ compact: filterFalseValues, flatten, merge, reduce } = require('lodash')
 { stripBaseDirectory, resolveDirAndPath, extractExtension, Stopwatch } = require('bender-broccoli-utils')
 
 { EmptyTree } = require('./tree')
@@ -37,7 +37,7 @@ class CopyDependenciesFilter extends CachingWriter
     @inputTree = inputTree
     @options = options
 
-    { @dependencyCache } = @options
+    { @project, @dependencyCache } = @options
 
     # Ensure that only extensions that are possible dependencies can cause a rebuild
     # (only if `@filterFromCache.include` isn't already specified)
@@ -54,6 +54,9 @@ class CopyDependenciesFilter extends CachingWriter
 
   updateCache: (srcDirs, destDir) ->
     srcDir = srcDirs[0]
+
+    # Fresh cache for every build
+    @perBuildCache = Object.create(null)
 
     @allRelativePathsToCopy = Object.create(null)
     @allResolvedPathsToCopy = Object.create(null)
@@ -113,6 +116,7 @@ class CopyDependenciesFilter extends CachingWriter
         - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
         - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
         - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
+        - #{@resolveStopwatch?.numLaps?()} paths resolved (in #{@totalNumLoadPaths()} lookup dirs) in #{@resolveStopwatch?.prettyOutLapsSum?()} (#{@resolveStopwatch?.prettyOutLapsAverage?()} avg)
 
     """
 
@@ -152,10 +156,8 @@ class CopyDependenciesFilter extends CachingWriter
     #   console.log "Found #{numDepsInTree} #{pluralize('deps', numDepsInTree)} for #{relativePath}, but #{if numDepsInTree is 1 then 'it' else 'all'} already #{if numDepsInTree is 1 then 'exists' else 'exist'} in the broccoli tree"
 
   processDependenciesToCopy: (relativePath, srcDir) ->
-    baseDirs = [srcDir].concat(@passedLoadPaths())
 
-    # TODO fail early if @passedLoadPaths is empty?
-
+    @perBuildCache.depPathsAlreadyProcessed ?= Object.create(null)
     depTree = @dependencyCache.dependencyTreeForFile(relativePath)
 
     if not depTree?
@@ -164,20 +166,34 @@ class CopyDependenciesFilter extends CachingWriter
         depTree: EmptyTree
       }
     else
-      allDependencyPaths = depTree.listOfAllDependencies
+      # Get dependencies _outside_ of the current project
+      allExternalDependencyPaths = depTree.listOfAllDependencies
         ignoreSelf: true
+        ignorePrefix: @project.pathPrefix()
         formatValue: (v) ->
           v.sourceRelativePath
 
       # Exclude paths that already exist in the srcDir or already have been copied
-      dependenciesToCopyAsObjs = for p in allDependencyPaths
-        extension = extractExtension(p)
+      dependenciesToCopyAsObjs = for depPath in allExternalDependencyPaths
+        continue if @perBuildCache.depPathsAlreadyProcessed[depPath]
 
-        resolvedDeps = resolveDirAndPath p,
+        @perBuildCache.depPathsAlreadyProcessed[depPath] = true
+
+        [depName, depVersion] = depPath.split(path.sep)
+        extension = extractExtension(depPath)
+
+        @resolveStopwatch = Stopwatch().start() unless @resolveStopwatch?
+
+        resolvedDeps = resolveDirAndPath depPath,
           filename: srcDir + '/' + relativePath
-          loadPaths: baseDirs
           extensionsToCheck: @dependencyCache.allPossibleCompiledExtensionsFor(extension)
           allowMultipleResultsFromSameDirectory: true
+
+          # We know the exact loadPaths to look in since every dependency built
+          # is output to a single directory (and dep build output is mutually exclusive)
+          loadPaths: @loadPathsFor(depName, depVersion)
+
+        @resolveStopwatch.lap()
 
         filteredResolvedDeps = for [resolvedDir, resolvedRelativePath] in resolvedDeps
           if resolvedDir isnt srcDir and not @allRelativePathsToCopy[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
@@ -187,6 +203,7 @@ class CopyDependenciesFilter extends CachingWriter
             undefined
 
         filteredResolvedDeps
+
 
       # Return all dependencies of this file _and_ only the files that we needed to copy
       {
@@ -205,9 +222,14 @@ class CopyDependenciesFilter extends CachingWriter
     else
       relativePath
 
-  passedLoadPaths: ->
-    # options.loadPaths might be a function (HACK?)
-    @options.loadPaths?() ? @options.loadPaths ? []
+  loadPathsFor: (depName, depVersion) ->
+    [@options.loadPathsByProjectAndVersion[depName][depVersion]].concat(@options.extraLoadPaths)
 
+  totalNumLoadPaths: ->
+    numDirPaths = reduce @options.loadPathsByProjectAndVersion, (sum, versionMap, key) ->
+      sum + Object.keys(versionMap).length
+    , 0
+
+    numDirPaths + @options.extraLoadPaths?.length
 
 module.exports = CopyDependenciesFilter

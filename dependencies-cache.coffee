@@ -34,6 +34,9 @@ class DependenciesCache
   anyPathsWithPrefix: (prefix) ->
     @pathPrefixCache[prefix] ?= _.unique (file for file, tree of @treeCache when file.indexOf(prefix) is 0)
 
+  allTreesWithPrefix: (prefix) ->
+    _.unique (tree for file, tree of @treeCache when file.indexOf(prefix) is 0)
+
   debugPrint: (callback) ->
     console.log 'Dependencies cache\n'
 

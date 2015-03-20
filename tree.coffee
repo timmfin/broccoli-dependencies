@@ -193,7 +193,10 @@ class DependencyNode extends TypedChildrenNode
     @traverseByType type, (node, visitChildren, depth) ->
       visitChildren()
 
-      if depth > 0 or not options.ignoreSelf
+      shouldIgnoreSelf = options.ignoreSelf and depth is 0
+      shouldIgnorePrefix = options.ignorePrefix and node.value.relativePath.indexOf(options.ignorePrefix) is 0
+
+      if not shouldIgnoreSelf and not shouldIgnorePrefix
         val = formatValue(node.value)
 
         if not addedDeps[val]?
