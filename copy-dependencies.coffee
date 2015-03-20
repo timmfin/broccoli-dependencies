@@ -108,21 +108,17 @@ class CopyDependenciesFilter extends CachingWriter
     for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
       symlinkOrCopy.sync src, dest
 
-    numFilesCopied = Object.keys(@allRelativePathsToCopy).length
+    # numFilesCopied = Object.keys(@allRelativePathsToCopy).length
 
-    console.log """
-      CopyDepsFilter time: #{stopwatch.stop().prettyOut()}
-        - Time to copy #{copyStopwatch.stop().prettyOut()}
-        - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
-        - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
-        - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
-        - #{@resolveStopwatch?.numLaps?()} paths resolved (in #{@totalNumLoadPaths()} lookup dirs) in #{@resolveStopwatch?.prettyOutLapsSum?()} (#{@resolveStopwatch?.prettyOutLapsAverage?()} avg)
-
-    """
-
-
-
-
+    # console.log """
+    #   CopyDepsFilter time: #{stopwatch.stop().prettyOut()}
+    #     - Time to copy #{copyStopwatch.stop().prettyOut()}
+    #     - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
+    #     - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
+    #     - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
+    #     - #{@resolveStopwatch?.numLaps?()} paths resolved (in #{@totalNumLoadPaths()} lookup dirs) in #{@resolveStopwatch?.prettyOutLapsSum?()} (#{@resolveStopwatch?.prettyOutLapsAverage?()} avg)
+    #
+    # """
 
   isIncludedPath: (relativePath) ->
     return true if not @options.includedDirs?
