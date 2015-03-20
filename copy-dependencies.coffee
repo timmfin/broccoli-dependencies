@@ -135,7 +135,7 @@ class CopyDependenciesFilter extends CachingWriter
     numDepsInTree = depTree.size() - 1
 
     if dependenciesToCopy.length > 0
-      console.log "Copying all external dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
+      # console.log "Copying all external dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
       for { resolvedDir, resolvedRelativePath } in dependenciesToCopy
