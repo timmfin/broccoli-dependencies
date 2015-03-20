@@ -70,7 +70,6 @@ class CopyDependenciesFilter extends CachingWriter
     processStopwatch = null
 
     walkedMap = walkSync(srcDir)
-    console.log "CopyDepsFilter walkSynctime: #{stopwatch.prettyOutSplit()}"
 
     walkedMap.map (relativePath) =>
       isDirectory = relativePath.slice(-1) == '/'
