@@ -25,6 +25,8 @@ class MultiResolver
 
     # Skip any parsing/caclulation if this tree has already been calculated
     if @dependencyCache.hasFile fileStruct.relativePath
+
+      # Why is this code here, it isn't doing anything, right?
       existingTree = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
 
     else
@@ -38,10 +40,12 @@ class MultiResolver
         if dep.extra.dependencyType?
           currentNode.pushTypedChildNode(dep.extra.dependencyType, newDepNode)
 
-      # HRM, is this code wrong? I'm only recursively following the deps of individual files,
-      # and not re-adding all other files (and recursiving) for any new dependency project
-      # found. Hmmmmm.... maybe if deps only build files that are necessary and not
-      # the entire folder....
+      # Note, I'm only recursively following the deps of individual files,
+      # and not re-adding all other files (and recursing) when a new whole project is
+      # found.
+      #
+      # This only works because deps only build files that are necessary and not
+      # their entire folder.
 
       @dependencyCache.storeDependencyTree currentNode
       currentNode
