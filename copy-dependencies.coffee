@@ -49,9 +49,6 @@ class CopyDependenciesFilter extends CachingWriter
         ///
 
 
-  # Max IO operations to allow in parallel (for async.mapLimit)
-  MAX_PARALLEL: 100
-
   updateCache: (srcDirs, destDir) ->
     srcDir = srcDirs[0]
 
