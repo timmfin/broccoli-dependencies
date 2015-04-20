@@ -40,13 +40,22 @@ class DependenciesCache
   debugPrint: (callback) ->
     console.log 'Dependencies cache\n'
 
+    callback ?= (n) -> n.sourceRelativePath
+
     for file, tree of @treeCache
+
+      # Skip the "relativePath alias" for files that have different sourceRelativePaths
+      continue if tree.value.sourceRelativePath? and tree.value.sourceRelativePath != file
+
       tree.debugPrint(callback)
       console.log ''
 
-  # Cleared between builds
   clearAll: ->
     @treeCache = {}
+    @clearSecondaryCaches()
+
+  # All the secondardy caches that are based on the treeCache (cleared between builds)
+  clearSecondaryCaches: ->
     @listCache = {}
     @pathPrefixCache = {}
 

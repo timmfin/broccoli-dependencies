@@ -17,38 +17,65 @@ class MultiResolver
 
     allExtensions
 
+  prepareForAnotherBuild: ->
+    @dependencyCache?.clearSecondaryCaches()
+
+    @filesProcessed = Object.create(null)
+    @allDependenciesFound = Object.create(null)
+
   findDependencies: (relativePath, srcDir) ->
     @findDependenciesHelper new FileStruct(srcDir, relativePath)
 
   findDependenciesHelper: (fileStruct, tmpFileCache = {}, depth = 0) ->
-    currentNode = new DependencyNode fileStruct
+    alreadyBeenProcessed = @filesProcessed[fileStruct.relativePath] is true
+    existingNode = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
 
     # Skip any parsing/caclulation if this tree has already been calculated
-    if @dependencyCache.hasFile fileStruct.relativePath
+    return existingNode if alreadyBeenProcessed
 
-      # Why is this code here, it isn't doing anything, right?
-      existingTree = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
+    @filesProcessed[fileStruct.relativePath] = true
 
+    if existingNode?
+      # Re-use current nodeReference (so nodes can be cached), but blow away all the children
+      # so we can re-evaluate those
+      currentNode = existingNode
+      currentNode.clearChildren()
     else
-      dependencies = @_findDependenciesAmongResolvers(fileStruct.relativePath, fileStruct.srcDir, tmpFileCache, depth)
+      currentNode = new DependencyNode fileStruct
 
-      # Recursively look for dependencies in all of the new children just added
-      for dep in dependencies
-        newDepNode = @findDependenciesHelper dep, tmpFileCache, depth + 1
-        currentNode.pushChildNode newDepNode
+    # Look for dependencies in this file
+    dependencies = @_findDependenciesAmongResolvers(fileStruct.relativePath, fileStruct.srcDir, tmpFileCache, depth)
 
-        if dep.extra.dependencyType?
-          currentNode.pushTypedChildNode(dep.extra.dependencyType, newDepNode)
+    # For each dep found, add it to this current node, but don't recurse. Rather, rely
+    # on the fact that all files are being iterated on and will eventually get
+    # filled in.
+    for dep in dependencies
 
-      # Note, I'm only recursively following the deps of individual files,
-      # and not re-adding all other files (and recursing) when a new whole project is
-      # found.
-      #
-      # This only works because deps only build files that are necessary and not
-      # their entire folder.
+      @trackDepFoundVia(dep.relativePath, fileStruct)
+      existingDepNode = @dependencyCache.dependencyTreeForFile(dep.relativePath)
 
-      @dependencyCache.storeDependencyTree currentNode
-      currentNode
+      # If this dependency node already exists (from earlier in this build pass, or
+      # cached from a previous build)
+      if existingDepNode?
+        depNode = existingDepNode
+      else
+        depNode = new DependencyNode(new FileStruct(currentNode.srcDir, dep.relativePath))
+        @dependencyCache.storeDependencyTree depNode
+
+      currentNode.pushChildNode depNode
+
+      if dep.extra.dependencyType?
+        currentNode.pushTypedChildNode(dep.extra.dependencyType, depNode)
+
+    # Note, I'm only recursively following the deps of individual files,
+    # and not re-adding all other files (and recursing) when a new whole project is
+    # found.
+    #
+    # This only works because deps only build files that are necessary and not
+    # their entire folder.
+
+    @dependencyCache.storeDependencyTree currentNode
+    currentNode
 
   _findDependenciesAmongResolvers: (relativePath, srcDir, tmpFileCache, depth) ->
     targetFilePath = srcDir + '/' + relativePath
@@ -72,6 +99,21 @@ class MultiResolver
 
     dependenciesFromAllResolvers
 
+  trackDepFoundVia: (dep, fromFilestruct) ->
+    console.log "trackDepFoundVia", dep, "from:", fromFilestruct.relativePath
+    @allDependenciesFound[dep] ?= []
+    @allDependenciesFound[dep].push(fromFilestruct)
+
+  # Iterate over all the dependencies found and make sure that each once was also
+  # "processed". This ensures that all depdnencies are actually real files (otherwise
+  # throw an error that a dep was defined that doesn't really exist).
+  ensureAllDependenciesFoundWereProcessed: (filesCached) ->
+    for dep, fromLocations of @allDependenciesFound
+      console.log "dep", dep
+      console.log "fromLocations", (fromLocations ? []).map((f) -> f?.relativePath).join(', ')
+
+      if @filesProcessed[dep] isnt true and filesCached[dep] isnt true
+        throw new Error "Dependency #{dep} doesn't exist (was described as a dep for #{fromLocations.map((f) -> f.relativePath).join(', ')})"
 
 
 module.exports = MultiResolver

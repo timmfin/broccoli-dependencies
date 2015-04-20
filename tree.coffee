@@ -19,6 +19,9 @@ class TreeNode
       childNode.parent = this
       @children.push childNode
 
+  clearChildren: ->
+    @children = []
+
   # Push aliases (since plural and singular are same impl)
   TreeNode::pushChildValues = TreeNode::pushChildValue
   TreeNode::pushChildNodes = TreeNode::pushChildNode
@@ -126,6 +129,10 @@ class TypedChildrenNode extends TreeNode
 
   childrenForType: (type) ->
     @childrenByType?[type] ? []
+
+  clearChildren: ->
+    super()
+    @childrenByType = []
 
   sizeForType: (type) ->
     count = 0

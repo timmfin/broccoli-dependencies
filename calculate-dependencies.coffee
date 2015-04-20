@@ -26,23 +26,24 @@ class CalculateDependenciesFilter extends NoOpFilter
     @extensions = @multiResolver.allResolverExtensions()
 
   rebuild: ->
-    console.log "In rebuild"
 
-    # Ensure that we re-build dependency trees for every re-build (and other
-    # per-run caches)
-    #
-    # TODO skip calculating dependencies and re-use previously cached trees
-    # if available and nothing has changed (useful?)
-    @multiResolver.dependencyCache?.clearAll()
+    # Ensure that we re-build list and prefix caches, even though we are
+    # saving/re-using the tree cache
+    @multiResolver.prepareForAnotherBuild()
 
     @previousTopLevelDir = @currentTopLevelDir = null
     @depTreesInTopLevelDir = 0
+    @cachedFiles = Object.create(null)
     stopwatch = new Stopwatch().start()
 
     NoOpFilter.prototype.rebuild.call(this).then (outputDir) =>
-      @logNumTreesForDirIfNeeded(@currentTopLevelDir, @depTreesInTopLevelDir)
-
       console.log "Took #{stopwatch.stop().prettyOut()} to calculate dependencies"
+
+      @logNumTreesForDirIfNeeded(@currentTopLevelDir, @depTreesInTopLevelDir)
+      @multiResolver.ensureAllDependenciesFoundWereProcessed(@cachedFiles)
+
+      @multiResolver.dependencyCache.debugPrint()
+
       outputDir
 
   processFile: (srcDir, relativePath) ->
@@ -57,6 +58,10 @@ class CalculateDependenciesFilter extends NoOpFilter
 
       @logNumTreesForDirIfNeeded(@previousTopLevelDir, @depTreesInTopLevelDir)
       @depTreesInTopLevelDir = 0
+
+  onCachedFile: (srcDir, relativePath) ->
+    @cachedFiles[relativePath] = true
+    console.log "Not processing #{relativePath} for deps, it was cached"
 
   logNumTreesForDirIfNeeded: (dir, num) ->
     if dir and num > 0
