@@ -215,10 +215,10 @@ class CopyDependenciesFilter extends CachingWriter
       relativePath
 
   loadPathsFor: (depName, depVersion) ->
-    [@options.loadPathsByProjectAndVersion[depName][depVersion]].concat(@options.extraLoadPaths)
+    [@options.loadPathsByProjectAndVersion()[depName][depVersion]].concat(@options.extraLoadPaths)
 
   totalNumLoadPaths: ->
-    numDirPaths = reduce @options.loadPathsByProjectAndVersion, (sum, versionMap, key) ->
+    numDirPaths = reduce @options.loadPathsByProjectAndVersion(), (sum, versionMap, key) ->
       sum + Object.keys(versionMap).length
     , 0
 
