@@ -60,7 +60,6 @@ class CalculateDependenciesFilter extends NoOpFilter
 
   onCachedFile: (srcDir, relativePath) ->
     @cachedFiles[relativePath] = true
-    console.log "Not processing #{relativePath} for deps, it was cached"
 
   logNumTreesForDirIfNeeded: (dir, num) ->
     if dir and num > 0
