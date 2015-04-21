@@ -62,16 +62,16 @@ class MultiResolver
       if existingDepNode?
         depNode = existingDepNode
 
-      # If this is a special case where we don't want to recurse any rely on the
-      # calculateDepenencies filter per-file cache
+      # If this is a special case where we don't want to recurse. Instead, we will
+      # rely on the knowing that all files within the `dontAutoRecurseWithin`
+      # prefixes will eventually get iterated over (or will be cached by the
+      # calculateDepenencies filter per-file cache)
       else if options.dontAutoRecurseWithin?.length > 0 and @_doesStartWith(dep.relativePath, options.dontAutoRecurseWithin)
-        # console.log "dont recurse", dep.relativePath
         depNode = new DependencyNode(dep)
         @dependencyCache.storeDependencyTree depNode
 
       # Otherwise, recurse and find dependencies
       else
-        # console.log "RECURSE", dep.relativePath
         depNode = @findDependenciesHelper dep, options, tmpFileCache, depth + 1
 
 
