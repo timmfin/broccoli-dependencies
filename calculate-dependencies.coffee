@@ -40,9 +40,8 @@ class CalculateDependenciesFilter extends NoOpFilter
       console.log "Took #{stopwatch.stop().prettyOut()} to calculate dependencies"
 
       @logNumTreesForDirIfNeeded(@currentTopLevelDir, @depTreesInTopLevelDir)
-      @multiResolver.ensureAllDependenciesFoundWereProcessed(@cachedFiles)
-
-      @multiResolver.dependencyCache.debugPrint()
+      @multiResolver.ensureAllDependenciesFoundWereProcessed @cachedFiles,
+        prefixesToLimitTo: @options.dontAutoRecurseWithin
 
       outputDir
 
@@ -79,7 +78,8 @@ class CalculateDependenciesFilter extends NoOpFilter
     false
 
   buildDepTreeFor: (relativePath, srcDir) ->
-    depTree = @multiResolver.findDependencies(relativePath, srcDir)
+    depTree = @multiResolver.findDependencies relativePath, srcDir,
+      dontAutoRecurseWithin: @options.dontAutoRecurseWithin
 
   hasRelevantExtension: (relativePath) ->
     for ext in @extensions

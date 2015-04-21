@@ -23,10 +23,10 @@ class MultiResolver
     @filesProcessed = Object.create(null)
     @allDependenciesFound = Object.create(null)
 
-  findDependencies: (relativePath, srcDir) ->
-    @findDependenciesHelper new FileStruct(srcDir, relativePath)
+  findDependencies: (relativePath, srcDir, options = {}) ->
+    @findDependenciesHelper new FileStruct(srcDir, relativePath), options
 
-  findDependenciesHelper: (fileStruct, tmpFileCache = {}, depth = 0) ->
+  findDependenciesHelper: (fileStruct, options, tmpFileCache = {}, depth = 0) ->
     alreadyBeenProcessed = @filesProcessed[fileStruct.relativePath] is true
     existingNode = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
 
@@ -51,6 +51,9 @@ class MultiResolver
     # filled in.
     for dep in dependencies
 
+      # Prevent ciruclar file deps
+      continue if dep.relativePath is fileStruct.relativePath
+
       @trackDepFoundVia(dep.relativePath, fileStruct)
       existingDepNode = @dependencyCache.dependencyTreeForFile(dep.relativePath)
 
@@ -58,9 +61,19 @@ class MultiResolver
       # cached from a previous build)
       if existingDepNode?
         depNode = existingDepNode
-      else
-        depNode = new DependencyNode(new FileStruct(currentNode.srcDir, dep.relativePath))
+
+      # If this is a special case where we don't want to recurse any rely on the
+      # calculateDepenencies filter per-file cache
+      else if options.dontAutoRecurseWithin?.length > 0 and @_doesStartWith(dep.relativePath, options.dontAutoRecurseWithin)
+        # console.log "dont recurse", dep.relativePath
+        depNode = new DependencyNode(dep)
         @dependencyCache.storeDependencyTree depNode
+
+      # Otherwise, recurse and find dependencies
+      else
+        # console.log "RECURSE", dep.relativePath
+        depNode = @findDependenciesHelper dep, options, tmpFileCache, depth + 1
+
 
       currentNode.pushChildNode depNode
 
@@ -76,6 +89,13 @@ class MultiResolver
 
     @dependencyCache.storeDependencyTree currentNode
     currentNode
+
+  _doesStartWith: (relativePath, excludedPathPrefixes) ->
+    for excludedPathPrefix in excludedPathPrefixes
+      if relativePath.indexOf(excludedPathPrefix) is 0
+        return true
+
+    false
 
   _findDependenciesAmongResolvers: (relativePath, srcDir, tmpFileCache, depth) ->
     targetFilePath = srcDir + '/' + relativePath
@@ -99,21 +119,22 @@ class MultiResolver
 
     dependenciesFromAllResolvers
 
-  trackDepFoundVia: (dep, fromFilestruct) ->
-    console.log "trackDepFoundVia", dep, "from:", fromFilestruct.relativePath
-    @allDependenciesFound[dep] ?= []
-    @allDependenciesFound[dep].push(fromFilestruct)
+  trackDepFoundVia: (depRelativePath, fromFilestruct) ->
+    # console.log "trackDepFoundVia", depRelativePath, "from:", fromFilestruct.relativePath
+    @allDependenciesFound[depRelativePath] ?= []
+    @allDependenciesFound[depRelativePath].push(fromFilestruct)
 
   # Iterate over all the dependencies found and make sure that each once was also
   # "processed". This ensures that all depdnencies are actually real files (otherwise
   # throw an error that a dep was defined that doesn't really exist).
-  ensureAllDependenciesFoundWereProcessed: (filesCached) ->
-    for dep, fromLocations of @allDependenciesFound
-      console.log "dep", dep
-      console.log "fromLocations", (fromLocations ? []).map((f) -> f?.relativePath).join(', ')
+  ensureAllDependenciesFoundWereProcessed: (filesCached, options = {}) ->
+    { prefixesToLimitTo } = options
 
+    for dep, fromLocations of @allDependenciesFound
       if @filesProcessed[dep] isnt true and filesCached[dep] isnt true
-        throw new Error "Dependency #{dep} doesn't exist (was described as a dep for #{fromLocations.map((f) -> f.relativePath).join(', ')})"
+        if not prefixesToLimitTo or @_doesStartWith(dep, prefixesToLimitTo)
+          throw new Error "Dependency #{dep} doesn't exist (was described as a dep for #{fromLocations.map((f) -> f.relativePath).join(', ')})"
+
 
 
 module.exports = MultiResolver
