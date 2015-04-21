@@ -37,7 +37,7 @@ class DependenciesCache
   allTreesWithPrefix: (prefix) ->
     _.unique (tree for file, tree of @treeCache when file.indexOf(prefix) is 0)
 
-  debugPrint: (callback) ->
+  debugPrint: (callback, filterFunc) ->
     console.log 'Dependencies cache\n'
 
     callback ?= (n) -> n.sourceRelativePath
@@ -46,6 +46,7 @@ class DependenciesCache
 
       # Skip the "relativePath alias" for files that have different sourceRelativePaths
       continue if tree.value.sourceRelativePath? and tree.value.sourceRelativePath != file
+      continue if filterFunc? and filterFunc(tree) is false
 
       tree.debugPrint(callback)
       console.log ''

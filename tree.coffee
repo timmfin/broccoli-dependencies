@@ -77,8 +77,11 @@ class TreeNode
 
     @traverse (node, visitChildren, depth) ->
       indent = ('  ' for [0...depth]).join('')
-      console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
-      visitChildren()
+      formattedValue = formatValue(node.value, depth)
+
+      if formattedValue isnt false
+        console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formattedValue}"
+        visitChildren()
 
   hasDescendent: (otherTree) ->
     result = false
