@@ -5,7 +5,7 @@
     "Set": "^0.4.1",
     "async": "^0.9.0",
     "bender-broccoli-utils": "timmfin/bender-broccoli-utils",
-    "broccoli-caching-writer": "ember-cli/broccoli-caching-writer.git#6c72664f45969e5672ca0f9ae81708018d46fa63",
+    "broccoli-caching-writer": "ember-cli/broccoli-caching-writer#6c72664f45969e5672ca0f9ae81708018d46fa63",
     "broccoli-kitchen-sink-helpers": "^0.2.4",
     "broccoli-noop-filter": "timmfin/broccoli-noop-filter",
     "coffee-script": "^1.8.0",
