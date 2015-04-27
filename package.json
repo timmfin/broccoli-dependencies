@@ -4,14 +4,14 @@
   "dependencies": {
     "Set": "^0.4.1",
     "async": "^0.9.0",
-    "bender-broccoli-utils": "git://github.com/timmfin/bender-broccoli-utils.git",
-    "broccoli-caching-writer": "git+ssh://git@github.com/ember-cli/broccoli-caching-writer.git#6c72664f45969e5672ca0f9ae81708018d46fa63",
-    "broccoli-noop-filter": "git://github.com/timmfin/broccoli-noop-filter.git",
+    "bender-broccoli-utils": "timmfin/bender-broccoli-utils",
+    "broccoli-caching-writer": "ember-cli/broccoli-caching-writer.git#6c72664f45969e5672ca0f9ae81708018d46fa63",
     "broccoli-kitchen-sink-helpers": "^0.2.4",
+    "broccoli-noop-filter": "timmfin/broccoli-noop-filter",
     "coffee-script": "^1.8.0",
+    "copy-dereference": "^1.0.0",
     "lodash": "^2.4.1",
     "mkdirp": "^0.5.0",
-    "node-copy-dereference": "git+ssh://git@github.com/timmfin/broccoli-dependencies.git#async-impl",
     "pluralize": "^1.0.1",
     "symlink-or-copy": "^1.0.1",
     "walk-sync": "^0.1.3"
