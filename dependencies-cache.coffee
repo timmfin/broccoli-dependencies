@@ -18,6 +18,15 @@ class DependenciesCache
     if tree.value.sourceRelativePath? and tree.relativePath isnt tree.value.sourceRelativePath
       @treeCache[tree.value.sourceRelativePath] = tree
 
+    # Keep track of all dependency types
+    dependencyType = tree.value.extra?.dependencyType
+
+    if dependencyType and not @allKnownDependencyTypes[dependencyType]?
+      @allKnownDependencyTypes[dependencyType] = true
+
+  allDependencyTypes: ->
+    Object.keys(@allKnownDependencyTypes)
+
   dependencyListForFile: (relativePath, options = undefined) ->
     # For now, don't try to cache calls with specific options (like ignoreSelf or formatValue)
     if @listCache[relativePath]? and options is undefined
@@ -53,6 +62,7 @@ class DependenciesCache
 
   clearAll: ->
     @treeCache = {}
+    @allKnownDependencyTypes = {}
     @clearSecondaryCaches()
 
   # All the secondardy caches that are based on the treeCache (cleared between builds)

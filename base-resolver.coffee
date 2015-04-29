@@ -80,7 +80,7 @@ class BaseResolver
 
   createDependency: (depDir, depPath, extra = {}) ->
     DependencyConstructor = @config.dependencyConstructor ? FileStruct
-    extra.dependencyType = @type
+    extra.dependencyType ?= @type
     new DependencyConstructor depDir, depPath, extra
 
 

@@ -148,7 +148,7 @@ class TypedChildrenNode extends TreeNode
 
   traverseByType: (type, callback) ->
     if type?
-      @constructor.visitNodeForType @, type, callback
+      @constructor.visitNodeForTypes @, type, callback
     else
       @traverse callback
 
@@ -160,13 +160,20 @@ class TypedChildrenNode extends TreeNode
       console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
       visitChildren()
 
-  @visitNodeForType: (node, type, callback, depth = 0) ->
-    children = node.childrenByType?[type]
+  @visitNodeForTypes: (node, types, callback, depth = 0) ->
+    if types? and not Array.isArray(types)
+      types = [types]
 
-    if children?.length
+    allChildren = []
+
+    for type in types
+      childrenForType = node.childrenByType?[type]
+      allChildren = allChildren.concat(childrenForType) if childrenForType?
+
+    if allChildren?.length
       visitChildren = =>
-        for child in children
-          @visitNodeForType child, type, callback, depth + 1
+        for child in allChildren
+          @visitNodeForTypes child, types, callback, depth + 1
 
     visitChildren ?= ->
 
