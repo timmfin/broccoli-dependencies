@@ -2,7 +2,6 @@
 
 fs            = require('fs')
 Set           = require('Set')
-path          = require('path')
 RSVP          = require('RSVP')
 async         = require('async')
 mkdirp        = require('mkdirp')
@@ -12,6 +11,7 @@ walkSync      = require('walk-sync')
 symlinkOrCopy = require('symlink-or-copy')
 CachingWriter = require('broccoli-caching-writer')
 
+{ dirname } = require('path')
 { compact: filterFalseValues, flatten, merge, reduce } = require('lodash')
 { stripBaseDirectory, resolveDirAndPath, extractExtension, Stopwatch } = require('bender-broccoli-utils')
 
@@ -37,7 +37,7 @@ class CopyDependenciesFilter extends CachingWriter
     @inputTree = inputTree
     @options = options
 
-    { @project, @dependencyCache } = @options
+    { @project, @dependencyCache, @benderContext } = @options
 
     # Ensure that only extensions that are possible dependencies can cause a rebuild
     # (only if `@filterFromCache.include` isn't already specified)
@@ -48,12 +48,41 @@ class CopyDependenciesFilter extends CachingWriter
           $
         ///
 
+  # Hacky way to modify the hash for caching-writer
+  keyForTree: (fullPath, initialRelativePath) ->
+    key = super(fullPath, initialRelativePath)
+
+
+    # initialRelativePath is undefined the first time keysForTree is called, so
+    # use that as a hook to add in more cache "keys" (another key for every file
+    # dep from outside the project)
+
+    if initialRelativePath is undefined
+      allOutsideDepsAsRelativePaths = @dependencyCache.dependencyListForAllTreesWithPrefix(@project.pathPrefix(), { ignorePrefix: @project.pathPrefix() })
+
+      allOutsideDepsAsTuples = []
+      for relativeDepPath in allOutsideDepsAsRelativePaths.sort()
+        allOutsideDepsAsTuples = allOutsideDepsAsTuples.concat @_cachedResolve(relativeDepPath)
+
+      outsideDepChildrenKeys = for [depSourceDir, depRelativePath] in allOutsideDepsAsTuples
+        super(depSourceDir + '/' + depRelativePath, depRelativePath)
+
+      key.children = key.children.concat(outsideDepChildrenKeys)
+
+
+    key
+
+  read: (readTree) ->
+    # Fresh cache for every build (cache used for generating hash, so can't only
+    # be cleared in updateCache)
+    @perBuildCache = Object.create(null)
+    @perBuildCache.resolveCache = Object.create(null)
+    @perBuildCache.depPathsAlreadyProcessed = Object.create(null)
+
+    super(readTree)
 
   updateCache: (srcDirs, destDir) ->
     srcDir = srcDirs[0]
-
-    # Fresh cache for every build
-    @perBuildCache = Object.create(null)
 
     @allRelativePathsToCopy = Object.create(null)
     @allResolvedPathsToCopy = Object.create(null)
@@ -139,7 +168,7 @@ class CopyDependenciesFilter extends CachingWriter
         sourcePath = resolvedDir + '/' + resolvedRelativePath
         copyDestination = destDir + '/' + resolvedRelativePath
 
-        @allDirectoriesToCreate.add(path.dirname(copyDestination))
+        @allDirectoriesToCreate.add(dirname(copyDestination))
         @allResolvedPathsToCopy[sourcePath] = copyDestination
 
         resolvedRelativePath
@@ -149,7 +178,6 @@ class CopyDependenciesFilter extends CachingWriter
 
   processDependenciesToCopy: (relativePath, srcDir) ->
 
-    @perBuildCache.depPathsAlreadyProcessed ?= Object.create(null)
     depTree = @dependencyCache.dependencyTreeForFile(relativePath)
 
     if not depTree?
@@ -170,22 +198,7 @@ class CopyDependenciesFilter extends CachingWriter
         continue if @perBuildCache.depPathsAlreadyProcessed[depPath]
 
         @perBuildCache.depPathsAlreadyProcessed[depPath] = true
-
-        [depName, depVersion] = depPath.split(path.sep)
-        extension = extractExtension(depPath)
-
-        @resolveStopwatch = Stopwatch().start() unless @resolveStopwatch?
-
-        resolvedDeps = resolveDirAndPath depPath,
-          filename: srcDir + '/' + relativePath
-          extensionsToCheck: @dependencyCache.allPossibleCompiledExtensionsFor(extension)
-          allowMultipleResultsFromSameDirectory: true
-
-          # We know the exact loadPaths to look in since every dependency built
-          # is output to a single directory (and dep build output is mutually exclusive)
-          loadPaths: @loadPathsFor(depName, depVersion)
-
-        @resolveStopwatch.lap()
+        resolvedDeps = @_cachedResolve(depPath, srcDir + '/' + relativePath)
 
         filteredResolvedDeps = for [resolvedDir, resolvedRelativePath] in resolvedDeps
           if resolvedDir isnt srcDir and not @allRelativePathsToCopy[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
@@ -202,6 +215,28 @@ class CopyDependenciesFilter extends CachingWriter
         dependenciesToCopy: filterFalseValues(flatten(dependenciesToCopyAsObjs))
         depTree
       }
+
+  _cachedResolve: (depPath) ->
+    return @perBuildCache.resolveCache[depPath] if @perBuildCache.resolveCache[depPath]?
+
+    @resolveStopwatch = Stopwatch().start() unless @resolveStopwatch?
+
+    [depName, depVersion] = @benderContext.extractProjectAndVersionFromPath(depPath)
+    extension = extractExtension(depPath)
+
+    resolvedDeps = @perBuildCache.resolveCache[depPath] = resolveDirAndPath depPath,
+      # filename: srcPath + '/' + depPath   # I don't think this is needed
+      extensionsToCheck: @dependencyCache.allPossibleCompiledExtensionsFor(extension)
+      allowMultipleResultsFromSameDirectory: true
+      allowRelativeLookupWithoutPrefix: false
+
+      # We know the exact loadPaths to look in since every dependency built
+      # is output to a single directory (and dep build output is mutually exclusive)
+      loadPaths: @loadPathsFor(depName, depVersion)
+
+    @resolveStopwatch.lap()
+
+    resolvedDeps
 
   getDestFilePath: (relativePath) ->
     if @options.extensions?.length > 0
