@@ -1,3 +1,5 @@
+Set = require('es6-native-set')  # Note a real memory-based (not string-based) set
+
 DependenciesCache = require('./dependencies-cache')
 FileStruct = require('./file-struct')
 DependencyNode = require('./tree')
@@ -26,7 +28,7 @@ class MultiResolver
   findDependencies: (relativePath, srcDir, options = {}) ->
     @findDependenciesHelper new FileStruct(srcDir, relativePath), options
 
-  findDependenciesHelper: (fileStruct, options, tmpFileCache = {}, depth = 0) ->
+  findDependenciesHelper: (fileStruct, options, tmpFileCache = {}, depth = 0, allNodesInThisPass = new Set) ->
     alreadyBeenProcessed = @filesProcessed[fileStruct.relativePath] is true
     existingNode = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
 
@@ -51,7 +53,7 @@ class MultiResolver
     # filled in.
     for dep in dependencies
 
-      # Prevent ciruclar file deps
+      # Prevent ciruclar file deps (at least one way they might happen)
       continue if dep.relativePath is fileStruct.relativePath
 
       @trackDepFoundVia(dep.relativePath, fileStruct)

@@ -1,4 +1,7 @@
+Set = require('es6-native-set')  # Note a real memory-based (not string-based) set
+
 { extractExtension } = require('bender-broccoli-utils')
+
 
 # A basic implementation of a tree
 class TreeNode
@@ -98,17 +101,23 @@ class TreeNode
     otherTree.hasDescendent(this)
 
   # Helper for traverse
-  @visitNode: (node, callback, depth = 0) ->
+  @visitNode: (node, callback, depth = 0, visitedNodesSet = new Set) ->
+    visitedNodesSet.add node
     children = node.children
 
     if children?.length
       visitChildren = =>
         for child in children
-          @visitNode child, callback, depth + 1
+          if not visitedNodesSet.has(child)
+            result = @visitNode child, callback, depth + 1, visitedNodesSet
+
+            # Allow returning false to exit early
+            return if result is false
 
     visitChildren ?= ->
 
     callback node, visitChildren, depth
+
 
   # New tree helper
   @createTree: (rootValue, values = []) ->
@@ -160,10 +169,11 @@ class TypedChildrenNode extends TreeNode
       console.log "#{indent}#{if depth is 0 then 'root: ' else ''}#{formatValue(node.value)}"
       visitChildren()
 
-  @visitNodeForTypes: (node, types, callback, depth = 0) ->
-    if types? and not Array.isArray(types)
-      types = [types]
+  @visitNodeForTypes: (node, types, callback, depth = 0, visitedNodesSet = new Set) ->
 
+    types = [types] if types? and not Array.isArray(types)
+
+    visitedNodesSet.add node
     allChildren = []
 
     for type in types
@@ -173,7 +183,11 @@ class TypedChildrenNode extends TreeNode
     if allChildren?.length
       visitChildren = =>
         for child in allChildren
-          @visitNodeForTypes child, types, callback, depth + 1
+          if not visitedNodesSet.has(child)
+            result = @visitNodeForTypes child, types, callback, depth + 1, visitedNodesSet
+
+            # Allow returning false to exit early
+            return if result is false
 
     visitChildren ?= ->
 
