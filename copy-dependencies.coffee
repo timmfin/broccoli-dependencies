@@ -34,7 +34,6 @@ class CopyDependenciesFilter extends CachingWriter
     # CoreObject (used inside CachingWriter) doesn't like being called directly
     CachingWriter.prototype.init.call this, [inputTree], { filterFromCache: options.filterFromCache }
 
-    @inputTree = inputTree
     @options = options
 
     { @project, @dependencyCache, @benderContext } = @options
@@ -72,14 +71,15 @@ class CopyDependenciesFilter extends CachingWriter
 
     key
 
-  read: (readTree) ->
+  rebuild: ->
     # Fresh cache for every build (cache used for generating hash, so can't only
     # be cleared in updateCache)
     @perBuildCache = Object.create(null)
     @perBuildCache.resolveCache = Object.create(null)
     @perBuildCache.depPathsAlreadyProcessed = Object.create(null)
 
-    super(readTree)
+
+    super()
 
   updateCache: (srcDirs, destDir) ->
     srcDir = srcDirs[0]
@@ -133,16 +133,16 @@ class CopyDependenciesFilter extends CachingWriter
     for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
       symlinkOrCopy.sync src, dest
 
-    # numFilesCopied = Object.keys(@allRelativePathsToCopy).length
+    numFilesCopied = Object.keys(@allRelativePathsToCopy).length
 
     # console.log """
-    #   CopyDepsFilter time: #{stopwatch.stop().prettyOut()}
+    #   CopyDepsFilter time: #{@stopwatch.stop().prettyOut()}
+    #     - Time before updateCache #{@stopwatch.prettyOutLastLap()}
     #     - Time to copy #{copyStopwatch.stop().prettyOut()}
-    #     - #{numFilesCopied} files copied (#{(stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
-    #     - #{@numFilesProcessed} files processed (#{(stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
-    #     - #{@numFilesWalked} files walked (#{(stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
-    #     - #{@resolveStopwatch?.numLaps?()} paths resolved (in #{@totalNumLoadPaths()} lookup dirs) in #{@resolveStopwatch?.prettyOutLapsSum?()} (#{@resolveStopwatch?.prettyOutLapsAverage?()} avg)
-    #
+    #     - #{numFilesCopied} files copied (#{(@stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
+    #     - #{@numFilesProcessed} files processed (#{(@stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
+    #     - #{@numFilesWalked} files walked (#{(@stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
+
     # """
 
   isIncludedPath: (relativePath) ->
