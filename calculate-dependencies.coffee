@@ -34,36 +34,42 @@ class CalculateDependenciesFilter extends NoOpFilter
     @previousTopLevelDir = @currentTopLevelDir = null
     @depTreesInTopLevelDir = 0
     @cachedFiles = Object.create(null)
-    stopwatch = new Stopwatch().start()
+    @stopwatch = new Stopwatch().start()
 
     NoOpFilter.prototype.rebuild.call(this).then (outputDir) =>
-      console.log "Took #{stopwatch.stop().prettyOut()} to calculate dependencies"
+      @stopwatch.lap()  # Make sure to finish lap for last top level dir
 
       @logNumTreesForDirIfNeeded(@currentTopLevelDir, @depTreesInTopLevelDir)
+
+      console.log "Calculated all file dependencies in #{@stopwatch.stop().prettyOut({ color: true })}"
+
       @multiResolver.ensureAllDependenciesFoundWereProcessed @cachedFiles,
         prefixesToLimitTo: @options.dontAutoRecurseWithin
 
       outputDir
 
   processFile: (srcDir, relativePath) ->
-    depTree = @buildDepTreeFor(relativePath, srcDir)
-
     @depTreesInTopLevelDir += 1
     topLevelDirForThisPath = relativePath.split(path.sep)[0]
 
     if @currentTopLevelDir isnt topLevelDirForThisPath
+      @stopwatch.lap()  # Lap for all the files processed on the last top level dir
+
       @previousTopLevelDir = @currentTopLevelDir
       @currentTopLevelDir = topLevelDirForThisPath
 
+
       @logNumTreesForDirIfNeeded(@previousTopLevelDir, @depTreesInTopLevelDir)
       @depTreesInTopLevelDir = 0
+
+    depTree = @buildDepTreeFor(relativePath, srcDir)
 
   onCachedFile: (srcDir, relativePath) ->
     @cachedFiles[relativePath] = true
 
   logNumTreesForDirIfNeeded: (dir, num) ->
     if dir and num > 0
-      console.log "Built #{num} dependency trees inside #{dir}"
+      console.log "Built #{num} dependency trees inside #{dir} (in #{@stopwatch.prettyOutLastLap({ color: true })})"
 
   canProcessFile: (relativePath) ->
     @hasRelevantExtension(relativePath) and @isIncludedPath(relativePath)
