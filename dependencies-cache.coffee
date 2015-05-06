@@ -21,6 +21,7 @@ class DependenciesCache
     # Keep track of all dependency types
     dependencyType = tree.value.extra?.dependencyType
 
+  ensureHasSeenDependencyType: (dependencyType) ->
     if dependencyType and not @allKnownDependencyTypes[dependencyType]?
       @allKnownDependencyTypes[dependencyType] = true
 

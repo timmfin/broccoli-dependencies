@@ -80,6 +80,7 @@ class MultiResolver
       currentNode.pushChildNode depNode
 
       if dep.extra.dependencyType?
+        @dependencyCache.ensureHasSeenDependencyType dep.extra.dependencyType
         currentNode.pushTypedChildNode(dep.extra.dependencyType, depNode)
 
     # Note, I'm only recursively following the deps of individual files,
@@ -122,7 +123,6 @@ class MultiResolver
     dependenciesFromAllResolvers
 
   trackDepFoundVia: (depRelativePath, fromFilestruct) ->
-    # console.log "trackDepFoundVia", depRelativePath, "from:", fromFilestruct.relativePath
     @allDependenciesFound[depRelativePath] ?= []
     @allDependenciesFound[depRelativePath].push(fromFilestruct)
 
