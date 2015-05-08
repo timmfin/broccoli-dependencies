@@ -12,6 +12,7 @@ class BaseResolver
     # A cache instance can be passed in to re-use dependency caches across different
     # build steps
     @dependencyCache = @config.dependencyCache ? new DependenciesCache
+    @perBuildCache = @config.perBuildCache
 
     if @config.log is true
       @log = console.log.bind 'console'

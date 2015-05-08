@@ -1,4 +1,3 @@
-Set = require('es6-native-set')  # Note a real memory-based (not string-based) set
 
 DependenciesCache = require('./dependencies-cache')
 FileStruct = require('./file-struct')
@@ -25,10 +24,12 @@ class MultiResolver
     @filesProcessed = Object.create(null)
     @allDependenciesFound = Object.create(null)
 
+    @resolverCaches = (Object.create(null) for resolver in @resolvers)
+
   findDependencies: (relativePath, srcDir, options = {}) ->
     @findDependenciesHelper new FileStruct(srcDir, relativePath), options
 
-  findDependenciesHelper: (fileStruct, options, tmpFileCache = {}, depth = 0, allNodesInThisPass = new Set) ->
+  findDependenciesHelper: (fileStruct, options, tmpFileCache = {}, depth = 0) ->
     alreadyBeenProcessed = @filesProcessed[fileStruct.relativePath] is true
     existingNode = @dependencyCache.dependencyTreeForFile fileStruct.relativePath
 
@@ -110,10 +111,11 @@ class MultiResolver
 
     dependenciesFromAllResolvers = []
 
-    for Resolver in @resolvers
+    for Resolver, i in @resolvers
       resolver = new Resolver
         loadPaths: [srcDir].concat(@options.loadPaths)
         dependencyCache: @options.dependencyCache
+        perBuildCache: @resolverCaches[i]
 
       if resolver.shouldProcessFile(relativePath)
         newDeps = resolver.dependenciesForFile(relativePath, srcDir, tmpFileCache, depth)
