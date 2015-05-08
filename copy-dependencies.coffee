@@ -47,37 +47,15 @@ class CopyDependenciesFilter extends CachingWriter
           $
         ///
 
-  # Hacky way to modify the hash for caching-writer
-  keyForTree: (fullPath, initialRelativePath) ->
-    key = super(fullPath, initialRelativePath)
-
-
-    # initialRelativePath is undefined the first time keysForTree is called, so
-    # use that as a hook to add in more cache "keys" (another key for every file
-    # dep from outside the project)
-
-    if initialRelativePath is undefined
-      allOutsideDepsAsRelativePaths = @dependencyCache.dependencyListForAllTreesWithPrefix(@project.pathPrefix(), { ignorePrefix: @project.pathPrefix() })
-
-      allOutsideDepsAsTuples = []
-      for relativeDepPath in allOutsideDepsAsRelativePaths.sort()
-        allOutsideDepsAsTuples = allOutsideDepsAsTuples.concat @_cachedResolve(relativeDepPath)
-
-      outsideDepChildrenKeys = for [depSourceDir, depRelativePath] in allOutsideDepsAsTuples
-        super(depSourceDir + '/' + depRelativePath, depRelativePath)
-
-      key.children = key.children.concat(outsideDepChildrenKeys)
-
-
-    key
-
   rebuild: ->
     # Fresh cache for every build (cache used for generating hash, so can't only
     # be cleared in updateCache)
     @perBuildCache = Object.create(null)
     @perBuildCache.resolveCache = Object.create(null)
     @perBuildCache.depPathsAlreadyProcessed = Object.create(null)
+    @perBuildCache.setOfExistingFiles = new Set
 
+    @stopwatch = Stopwatch().start()
 
     super()
 
@@ -186,12 +164,7 @@ class CopyDependenciesFilter extends CachingWriter
         depTree: EmptyTree
       }
     else
-      # Get dependencies _outside_ of the current project
-      allExternalDependencyPaths = depTree.listOfAllDependencies
-        ignoreSelf: true
-        ignorePrefix: @project.pathPrefix()
-        formatValue: (v) ->
-          v.sourceRelativePath
+      allExternalDependencyPaths = @_listOfExternalDepsFromTree(depTree)
 
       # Exclude paths that already exist in the srcDir or already have been copied
       dependenciesToCopyAsObjs = for depPath in allExternalDependencyPaths
