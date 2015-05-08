@@ -36,7 +36,7 @@ class CopyDependenciesFilter extends CachingWriter
 
     @options = options
 
-    { @project, @dependencyCache, @benderContext } = @options
+    { @project, @dependencyCache, @benderContext, @typesToCopy } = @options
 
     # Ensure that only extensions that are possible dependencies can cause a rebuild
     # (only if `@filterFromCache.include` isn't already specified)
@@ -70,12 +70,19 @@ class CopyDependenciesFilter extends CachingWriter
     @numFilesProcessed = 0
     @numFilesWalked = 0
 
-    stopwatch = Stopwatch().start()
     processStopwatch = null
+    @stopwatch.lap()
 
-    walkedMap = walkSync(srcDir)
+    walkedArray = walkSync(srcDir)
 
-    walkedMap.map (relativePath) =>
+    # Save all of the files in the input dir for later usage
+    for relativePath in walkedArray
+      isDirectory = relativePath.slice(-1) == '/'
+      @perBuildCache.setOfExistingFiles.add(relativePath) unless isDirectory
+
+    @stopwatch.lap()
+
+    walkedArray.map (relativePath) =>
       isDirectory = relativePath.slice(-1) == '/'
       outputPath  = @getDestFilePath(relativePath)
       destPath    = destDir + '/' + (outputPath or relativePath)
@@ -94,10 +101,12 @@ class CopyDependenciesFilter extends CachingWriter
           @numFilesProcessed += 1
           processStopwatch = Stopwatch().start() unless processStopwatch
           @processFile(srcDir, destDir, relativePath)
-          # console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap()}"
+          # console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap({ color: true })}"
 
         # always copy across the source file, even if it shouldn't be processed for deps.
         @otherFilesToCopy[srcDir + '/' + relativePath] = destPath
+
+    @stopwatch.lap()
 
 
     # Batch up the copies and dir creation to the end (but still keeping sync
@@ -111,15 +120,26 @@ class CopyDependenciesFilter extends CachingWriter
     for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
       symlinkOrCopy.sync src, dest
 
-    numFilesCopied = Object.keys(@allRelativePathsToCopy).length
+    @stopwatch.lap()
+    # numFilesCopied = Object.keys(@allRelativePathsToCopy).length
+
+    # timeToWalkInMs = @stopwatch.getLapAsMilliseconds(-3)
+    # timeToProcessInMs = @stopwatch.getLapAsMilliseconds(-2)
+    # timeToCopyInMs = @stopwatch.getLapAsMilliseconds(-1)
 
     # console.log """
-    #   CopyDepsFilter time: #{@stopwatch.stop().prettyOut()}
-    #     - Time before updateCache #{@stopwatch.prettyOutLastLap()}
-    #     - Time to copy #{copyStopwatch.stop().prettyOut()}
-    #     - #{numFilesCopied} files copied (#{(@stopwatch.milliseconds()/numFilesCopied).toFixed(2)} ms/file)
-    #     - #{@numFilesProcessed} files processed (#{(@stopwatch.milliseconds()/@numFilesProcessed).toFixed(2)} ms/file)
-    #     - #{@numFilesWalked} files walked (#{(@stopwatch.milliseconds()/@numFilesWalked).toFixed(2)} ms/file)
+
+    #   CopyDepsFilter time for #{@project.prettyName()}: #{@stopwatch.stop().prettyOut({ color: true })}
+    #     - Time before keysForTree #{@stopwatch.prettyOutLap(-7, { color: true })}
+    #     - Time in keysForTree #{@stopwatch.prettyOutLap(-6, { color: true })}
+    #     - Time in custom keysForTree for external deps #{@stopwatch.prettyOutLap(-5, { color: true })}
+    #     - Time before updateCache #{@stopwatch.prettyOutLap(-4, { color: true })}
+    #     - Time to walk #{@stopwatch.prettyOutLap(-3, { color: true })}
+    #     - Time to process #{@stopwatch.prettyOutLap(-2, { color: true })}
+    #     - Time to copy #{@stopwatch.prettyOutLap(-1, { color: true })}
+    #     - #{@numFilesWalked} files walked (#{(timeToWalkInMs/@numFilesWalked).toFixed(2)} ms/file)
+    #     - #{@numFilesProcessed} files processed (#{(timeToProcessInMs/@numFilesProcessed).toFixed(2)} ms/file)
+    #     - #{numFilesCopied} files copied (#{(timeToCopyInMs/numFilesCopied).toFixed(2)} ms/file)
 
     # """
 
@@ -139,7 +159,7 @@ class CopyDependenciesFilter extends CachingWriter
     numDepsInTree = depTree.size() - 1
 
     if dependenciesToCopy.length > 0
-      # console.log "Copying all external dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
+      console.log "Copying all external dependencies from #{relativePath} (#{dependenciesToCopy.length} #{pluralize('file', dependenciesToCopy.length)} out of #{numDepsInTree} deps)"
 
       # Copy all the files needed, and create an array of all their relative paths (for later usage)
       for { resolvedDir, resolvedRelativePath } in dependenciesToCopy
@@ -169,12 +189,14 @@ class CopyDependenciesFilter extends CachingWriter
       # Exclude paths that already exist in the srcDir or already have been copied
       dependenciesToCopyAsObjs = for depPath in allExternalDependencyPaths
         continue if @perBuildCache.depPathsAlreadyProcessed[depPath]
+        continue if @perBuildCache.setOfExistingFiles.has(depPath)
 
         @perBuildCache.depPathsAlreadyProcessed[depPath] = true
+
         resolvedDeps = @_cachedResolve(depPath, srcDir + '/' + relativePath)
 
         filteredResolvedDeps = for [resolvedDir, resolvedRelativePath] in resolvedDeps
-          if resolvedDir isnt srcDir and not @allRelativePathsToCopy[resolvedRelativePath] and @options.filter?(resolvedRelativePath) isnt false
+          if resolvedDir isnt srcDir and not @allRelativePathsToCopy[resolvedRelativePath] # and @options.filterDep?(resolvedRelativePath) isnt false
             @allRelativePathsToCopy[resolvedRelativePath] = true
             { resolvedDir, resolvedRelativePath }
           else
@@ -188,6 +210,13 @@ class CopyDependenciesFilter extends CachingWriter
         dependenciesToCopy: filterFalseValues(flatten(dependenciesToCopyAsObjs))
         depTree
       }
+
+  _listOfExternalDepsFromTree: (depTree) ->
+    depTree.listOfAllDependenciesForType @typesToCopy,
+      ignoreSelf: true
+      filter: @options.filterDep
+      formatValue: (v) ->
+        v.sourceRelativePath
 
   _cachedResolve: (depPath) ->
     return @perBuildCache.resolveCache[depPath] if @perBuildCache.resolveCache[depPath]?
