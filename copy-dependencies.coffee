@@ -252,7 +252,24 @@ class CopyDependenciesFilter extends CachingWriter
       relativePath
 
   loadPathsFor: (depName, depVersion) ->
-    [@options.loadPathsByProjectAndVersion()[depName][depVersion]].concat(@options.extraLoadPaths)
+    loadPaths = []
+
+    # First load paths com from the explicit map we have of dependency name & version
+    # to ouput dir
+    pathForDep = @options.loadPathsByProjectAndVersion()?[depName]?[depVersion]
+    loadPaths = [pathForDep] if pathForDep?
+
+    # Then any other trees who's output might be needed
+    extraLoadTreesOutputPaths = (for extraTree in (@options.extraLoadTrees ? [])
+      extraTree.outputPath ? extraTree.tmpDestDir
+    ).filter (t) -> t?
+
+    loadPaths = loadPaths.concat(extraLoadTreesOutputPaths) if extraLoadTreesOutputPaths.length > 0
+
+    # And then any other extra directories
+    loadPaths = loadPaths.concat(@options.extraLoadPaths) if @options.extraLoadPaths?
+
+    loadPaths
 
   totalNumLoadPaths: ->
     numDirPaths = reduce @options.loadPathsByProjectAndVersion(), (sum, versionMap, key) ->
