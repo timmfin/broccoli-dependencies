@@ -228,6 +228,9 @@ class DependencyNode extends TypedChildrenNode
       shouldIgnorePrefix = options.ignorePrefix and node.value.relativePath.indexOf(options.ignorePrefix) is 0
 
       if not shouldIgnoreSelf and not shouldIgnorePrefix
+        if options.filter? and options.filter(node.value, node, depth) is false
+          return false
+
         val = formatValue(node.value)
 
         if not addedDeps[val]?
