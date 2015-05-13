@@ -58,7 +58,7 @@ class DependenciesCache
         if not nodesVisited[node.value.sourceRelativePath]
           nodesVisited[node.value.sourceRelativePath] = true
 
-          if options.ignorePrefix? and node.value.sourceRelativePath.indexOf(options.ignorePrefix) isnt 0
+          if not options.ignorePrefix or node.value.sourceRelativePath.indexOf(options.ignorePrefix) isnt 0
             allDepsList.push(node.value.sourceRelativePath)
 
           visitChildren()
