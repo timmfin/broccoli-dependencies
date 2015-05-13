@@ -53,19 +53,21 @@ class CopyDependenciesFilter extends CachingWriter
     @perBuildCache = Object.create(null)
     @perBuildCache.resolveCache = Object.create(null)
     @perBuildCache.depPathsAlreadyProcessed = Object.create(null)
-    @perBuildCache.setOfExistingFiles = new Set
 
     @stopwatch = Stopwatch().start()
 
-    super()
+    result = super()
+    result.then => @callPostBuildCallbackIfNecessary()
+    result
 
   updateCache: (srcDirs, destDir) ->
     srcDir = srcDirs[0]
 
     @allRelativePathsToCopy = Object.create(null)
     @allResolvedPathsToCopy = Object.create(null)
-    @otherFilesToCopy = Object.create(null)
+    @sourceFilesToCopy = Object.create(null)
     @allDirectoriesToCreate = new Set
+    @setOfExistingFiles = new Set
 
     @numFilesProcessed = 0
     @numFilesWalked = 0
@@ -78,7 +80,7 @@ class CopyDependenciesFilter extends CachingWriter
     # Save all of the files in the input dir for later usage
     for relativePath in walkedArray
       isDirectory = relativePath.slice(-1) == '/'
-      @perBuildCache.setOfExistingFiles.add(relativePath) unless isDirectory
+      @setOfExistingFiles.add(relativePath) unless isDirectory
 
     @stopwatch.lap()
 
@@ -104,7 +106,7 @@ class CopyDependenciesFilter extends CachingWriter
           # console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap({ color: true })}"
 
         # always copy across the source file, even if it shouldn't be processed for deps.
-        @otherFilesToCopy[srcDir + '/' + relativePath] = destPath
+        @sourceFilesToCopy[srcDir + '/' + relativePath] = destPath
 
     @stopwatch.lap()
 
@@ -117,7 +119,7 @@ class CopyDependenciesFilter extends CachingWriter
 
     copyStopwatch = Stopwatch().start()
 
-    for src, dest of merge({}, @otherFilesToCopy, @allResolvedPathsToCopy)
+    for src, dest of merge({}, @sourceFilesToCopy, @allResolvedPathsToCopy)
       symlinkOrCopy.sync src, dest
 
     @stopwatch.lap()
@@ -189,7 +191,7 @@ class CopyDependenciesFilter extends CachingWriter
       # Exclude paths that already exist in the srcDir or already have been copied
       dependenciesToCopyAsObjs = for depPath in allExternalDependencyPaths
         continue if @perBuildCache.depPathsAlreadyProcessed[depPath]
-        continue if @perBuildCache.setOfExistingFiles.has(depPath)
+        continue if @setOfExistingFiles.has(depPath)
 
         @perBuildCache.depPathsAlreadyProcessed[depPath] = true
 
@@ -277,5 +279,14 @@ class CopyDependenciesFilter extends CachingWriter
     , 0
 
     numDirPaths + @options.extraLoadPaths?.length
+
+  # Call the optionally attach postBuild callback with some useful data (list of files
+  # in the intputTree and list of all deps)
+  callPostBuildCallbackIfNecessary: ->
+    if @options.postBuild?
+      allRelativeSourceFiles = @setOfExistingFiles?.toArray() ? []
+      allRelativeDepFiles = (file for file, value of @allRelativePathsToCopy when value is true)
+
+      @options.postBuild(allRelativeSourceFiles, allRelativeDepFiles)
 
 module.exports = CopyDependenciesFilter
