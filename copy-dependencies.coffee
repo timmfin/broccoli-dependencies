@@ -1,15 +1,17 @@
 'use strict'
 
-fs            = require('fs')
-Set           = require('Set')
-RSVP          = require('RSVP')
-async         = require('async')
-mkdirp        = require('mkdirp')
-helpers       = require('broccoli-kitchen-sink-helpers')
-pluralize     = require('pluralize')
-walkSync      = require('walk-sync')
-symlinkOrCopy = require('symlink-or-copy')
-CachingWriter = require('broccoli-caching-writer')
+fs             = require('fs')
+Set            = require('Set')
+RSVP           = require('RSVP')
+async          = require('async')
+mkdirp         = require('mkdirp')
+helpers        = require('broccoli-kitchen-sink-helpers')
+walkSync       = require('walk-sync')
+pluralize      = require('pluralize')
+mapSeries      = require('promise-map-series')
+symlinkOrCopy  = require('symlink-or-copy')
+CachingWriter  = require('broccoli-caching-writer')
+NoopTreeJoiner = require('broccoli-noop-join-trees')
 
 { dirname } = require('path')
 { compact: filterFalseValues, flatten, merge, reduce } = require('lodash')
@@ -30,6 +32,10 @@ class CopyDependenciesFilter extends CachingWriter
   constructor: (inputTree, options = {}) ->
     if not (this instanceof CopyDependenciesFilter)
       return new CopyDependenciesFilter(inputTree, options)
+
+    # Ensure any extraLoadTrees get read first before the main inputTree
+    if options?.extraLoadTrees?.length > 0
+      inputTree = new NoopTreeJoiner(inputTree, options.extraLoadTrees)
 
     # CoreObject (used inside CachingWriter) doesn't like being called directly
     CachingWriter.prototype.init.call this, [inputTree], { filterFromCache: options.filterFromCache }

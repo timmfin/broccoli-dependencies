@@ -239,15 +239,18 @@ class PreprocessorAwareDepenenciesCache extends DependenciesCache
     else
       [ext]
 
-  allPossibleCompiledExtensionsFor: (ext) ->
+  allPossibleCompiledExtensionsFor: (ext, options) ->
 
     # Trim leading dot if provided
     ext = ext[1..] if ext?[0] is '.'
 
     if @preprocessorsByExtensionInverted?[ext]?
-      Object.keys(@preprocessorsByExtensionInverted[ext]).concat([ext])
+      result = Object.keys(@preprocessorsByExtensionInverted[ext])
     else
-      [ext]
+      result = []
+
+    result.push(ext) unless options?.excludeOwnExtension is true
+    result
 
   # Try super methods with out without preprocessor conversion
 
