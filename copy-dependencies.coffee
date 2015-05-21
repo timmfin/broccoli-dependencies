@@ -93,13 +93,11 @@ class CopyDependenciesFilter extends CachingWriter
     walkedArray.map (relativePath) =>
       isDirectory = relativePath.slice(-1) == '/'
       outputPath  = @getDestFilePath(relativePath)
-      destPath    = destDir + '/' + (outputPath or relativePath)
 
       shouldBeProcessed = @isIncludedPath(relativePath)
 
-      # If this is a directory make sure that it exists in the destination.
       if isDirectory
-        @allDirectoriesToCreate.add(destPath)
+        @onVisitedDirectory(srcDir, relativePath, destDir)
       else
         @numFilesWalked += 1
 
@@ -111,8 +109,7 @@ class CopyDependenciesFilter extends CachingWriter
           @processFile(srcDir, destDir, relativePath)
           # console.log "   copy deps processFile lap: #{stopwatch.lap().prettyOutLastLap({ color: true })}"
 
-        # always copy across the source file, even if it shouldn't be processed for deps.
-        @sourceFilesToCopy[srcDir + '/' + relativePath] = destPath
+        @onVisitedFileInInputTree(srcDir, relativePath, shouldBeProcessed, destDir, outputPath)
 
     @stopwatch.lap()
 
@@ -150,6 +147,18 @@ class CopyDependenciesFilter extends CachingWriter
     #     - #{numFilesCopied} files copied (#{(timeToCopyInMs/numFilesCopied).toFixed(2)} ms/file)
 
     # """
+
+
+  # Hooks so that CopyProjectDependenciesFilter can change copy/symlink behavior
+
+  onVisitedDirectory: (srcDir, relativePath, destDir) ->
+    # By default, if this is a directory make sure that it exists in the destination.
+    @allDirectoriesToCreate.add destDir + '/' + relativePath
+
+  onVisitedFileInInputTree: (srcDir, relativePath, wasProcessed, destDir, outputPath) ->
+    # By default, always copy across the source file, even if it wasn't processed for deps.
+    destPath    = destDir + '/' + (outputPath or relativePath)
+    @sourceFilesToCopy[srcDir + '/' + relativePath] = destPath
 
   isIncludedPath: (relativePath) ->
     return true if not @options.includedDirs?
