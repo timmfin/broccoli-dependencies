@@ -44,6 +44,9 @@ class DependenciesCache
   anyPathsWithPrefix: (prefix) ->
     @pathPrefixCache[prefix] ?= _.unique (file for file, tree of @treeCache when file.indexOf(prefix) is 0)
 
+  anySourcePathsWithPrefix: (prefix) ->
+    @sourcePathPrefixCache[prefix] ?= _.unique (tree.value.sourceRelativePath for file, tree of @treeCache when file.indexOf(prefix) is 0 and tree.value.sourceRelativePath?)
+
   allTreesWithPrefix: (prefix) ->
     _.unique (tree for file, tree of @treeCache when file.indexOf(prefix) is 0)
 
@@ -88,6 +91,7 @@ class DependenciesCache
   clearSecondaryCaches: ->
     @listCache = {}
     @pathPrefixCache = {}
+    @sourcePathPrefixCache = {}
 
 
 { convertFromPreprocessorExtension, extractExtension, resolveDirAndPath } = require('bender-broccoli-utils')
