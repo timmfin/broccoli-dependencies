@@ -25,6 +25,12 @@ class CalculateDependenciesFilter extends NoOpFilter
     @multiResolver = new MultiResolver options
     @extensions = @multiResolver.allResolverExtensions()
 
+    if @options.includedDirs? and not Array.isArray(@options.includedDirs)
+      @options.includedDirs = [@options.includedDirs]
+
+    if @options.excludedDirs? and not Array.isArray(@options.excludedDirs)
+      @options.excludedDirs = [@options.excludedDirs]
+
   rebuild: ->
 
     # Ensure that we re-build list and prefix caches, even though we are
@@ -58,7 +64,6 @@ class CalculateDependenciesFilter extends NoOpFilter
       @previousTopLevelDir = @currentTopLevelDir
       @currentTopLevelDir = topLevelDirForThisPath
 
-
       @logNumTreesForDirIfNeeded(@previousTopLevelDir, @depTreesInTopLevelDir)
       @depTreesInTopLevelDir = 0
 
@@ -72,13 +77,21 @@ class CalculateDependenciesFilter extends NoOpFilter
       console.log "Built #{num} dependency trees inside #{dir} (in #{@stopwatch.prettyOutLastLap({ color: true })})"
 
   canProcessFile: (relativePath) ->
-    @hasRelevantExtension(relativePath) and @isIncludedPath(relativePath)
+    @hasRelevantExtension(relativePath) and @isIncludedPath(relativePath) and not @isExcludedPath(relativePath)
 
   isIncludedPath: (relativePath) ->
     return true if not @options.includedDirs?
 
     for includedDir in @options.includedDirs
       return true if relativePath.indexOf(includedDir) is 0
+
+    false
+
+  isExcludedPath: (relativePath) ->
+    return true if not @options.excludedDirs?
+
+    for excludeDir in @options.excludedDirs
+      return true if relativePath.indexOf(excludeDir) is 0
 
     false
 
