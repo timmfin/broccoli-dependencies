@@ -129,13 +129,14 @@ class MultiResolver
     @allDependenciesFound[depRelativePath].push(fromFilestruct)
 
   # Iterate over all the dependencies found and make sure that each once was also
-  # "processed". This ensures that all depdnencies are actually real files (otherwise
+  # "processed". This ensures that all dependencies are actually real files (otherwise
   # throw an error that a dep was defined that doesn't really exist).
   ensureAllDependenciesFoundWereProcessed: (filesCached, options = {}) ->
     { prefixesToLimitTo } = options
 
     for dep, fromLocations of @allDependenciesFound
       if @filesProcessed[dep] isnt true and filesCached[dep] isnt true
+        console.log "dep: #{dep} (prefixesToLimitTo = #{prefixesToLimitTo})"
         if not prefixesToLimitTo or @_doesStartWith(dep, prefixesToLimitTo)
           throw new Error "Dependency #{dep} doesn't exist (was described as a dep for #{fromLocations.map((f) -> f.relativePath).join(', ')})"
 
