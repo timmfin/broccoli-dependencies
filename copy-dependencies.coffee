@@ -20,9 +20,8 @@ NoopTreeJoiner = require('broccoli-noop-join-trees')
 { EmptyTree } = require('./tree')
 
 
-# Follows the dependency tree created by your configured resolvers (Sass, sprockets
-# directives, jade, etc), and copies all of those dependencies into the broccoli
-# "working dir" if they are not already there.
+# Follows the dependency graph created earlier and copies all of those dependency
+# projects into the broccoli "working dir" if they are not already there.
 #
 # This is necessary to ensure that any dependent files are included before the
 # rest of the build steps.
@@ -33,33 +32,14 @@ class CopyDependenciesFilter extends CachingWriter
     if not (this instanceof CopyDependenciesFilter)
       return new CopyDependenciesFilter(inputTree, options)
 
-    # Ensure any extraLoadTrees get read first before the main inputTree
-    if options?.extraLoadTrees?.length > 0
-      inputTree = new NoopTreeJoiner(inputTree, options.extraLoadTrees)
-
     # CoreObject (used inside CachingWriter) doesn't like being called directly
-    CachingWriter.prototype.init.call this, [inputTree], { filterFromCache: options.filterFromCache }
+    CachingWriter.prototype.init.call this, [inputTree], {}
 
     @options = options
+    { @project, @benderContext } = @options
 
-    { @project, @dependencyCache, @benderContext, @typesToCopy } = @options
-
-    # Ensure that only extensions that are possible dependencies can cause a rebuild
-    # (only if `@filterFromCache.include` isn't already specified)
-    if @filterFromCache.include.length is 0 and @options.extensions?
-      @filterFromCache.include.push ///
-          .*
-          \.(?: #{@options.extensions.join('|')} )
-          $
-        ///
 
   rebuild: ->
-    # Fresh cache for every build (cache used for generating hash, so can't only
-    # be cleared in updateCache)
-    @perBuildCache = Object.create(null)
-    @perBuildCache.resolveCache = Object.create(null)
-    @perBuildCache.depPathsAlreadyProcessed = Object.create(null)
-
     @stopwatch = Stopwatch().start()
 
     result = super()
@@ -70,7 +50,6 @@ class CopyDependenciesFilter extends CachingWriter
     srcDir = srcDirs[0]
 
     @allRelativePathsToCopy = Object.create(null)
-    @allResolvedPathsToCopy = Object.create(null)
     @sourceFilesToCopy = Object.create(null)
     @allDirectoriesToCreate = new Set
     @setOfExistingFiles = new Set
@@ -94,8 +73,6 @@ class CopyDependenciesFilter extends CachingWriter
       isDirectory = relativePath.slice(-1) == '/'
       outputPath  = @getDestFilePath(relativePath)
 
-      shouldBeProcessed = @isIncludedPath(relativePath)
-
       if isDirectory
         @onVisitedDirectory(srcDir, relativePath, destDir)
       else
@@ -103,7 +80,7 @@ class CopyDependenciesFilter extends CachingWriter
 
         # If this is a file we want to process (getDestFilePath checks if it matches
         # any of the `@options.extensions` configured)
-        if outputPath and shouldBeProcessed
+        if outputPath
           @numFilesProcessed += 1
           processStopwatch = Stopwatch().start() unless processStopwatch
           @processFile(srcDir, destDir, relativePath)
@@ -126,27 +103,6 @@ class CopyDependenciesFilter extends CachingWriter
       symlinkOrCopy.sync src, dest
 
     @stopwatch.lap()
-    # numFilesCopied = Object.keys(@allRelativePathsToCopy).length
-
-    # timeToWalkInMs = @stopwatch.getLapAsMilliseconds(-3)
-    # timeToProcessInMs = @stopwatch.getLapAsMilliseconds(-2)
-    # timeToCopyInMs = @stopwatch.getLapAsMilliseconds(-1)
-
-    # console.log """
-
-    #   CopyDepsFilter time for #{@project.prettyName()}: #{@stopwatch.stop().prettyOut({ color: true })}
-    #     - Time before keysForTree #{@stopwatch.prettyOutLap(-7, { color: true })}
-    #     - Time in keysForTree #{@stopwatch.prettyOutLap(-6, { color: true })}
-    #     - Time in custom keysForTree for external deps #{@stopwatch.prettyOutLap(-5, { color: true })}
-    #     - Time before updateCache #{@stopwatch.prettyOutLap(-4, { color: true })}
-    #     - Time to walk #{@stopwatch.prettyOutLap(-3, { color: true })}
-    #     - Time to process #{@stopwatch.prettyOutLap(-2, { color: true })}
-    #     - Time to copy #{@stopwatch.prettyOutLap(-1, { color: true })}
-    #     - #{@numFilesWalked} files walked (#{(timeToWalkInMs/@numFilesWalked).toFixed(2)} ms/file)
-    #     - #{@numFilesProcessed} files processed (#{(timeToProcessInMs/@numFilesProcessed).toFixed(2)} ms/file)
-    #     - #{numFilesCopied} files copied (#{(timeToCopyInMs/numFilesCopied).toFixed(2)} ms/file)
-
-    # """
 
 
   # Hooks so that CopyProjectDependenciesFilter can change copy/symlink behavior
@@ -159,14 +115,6 @@ class CopyDependenciesFilter extends CachingWriter
     # By default, always copy across the source file, even if it wasn't processed for deps.
     destPath    = destDir + '/' + (outputPath or relativePath)
     @sourceFilesToCopy[srcDir + '/' + relativePath] = destPath
-
-  isIncludedPath: (relativePath) ->
-    return true if not @options.includedDirs?
-
-    for includedDir in @options.includedDirs
-      return true if relativePath.indexOf(includedDir) is 0
-
-    false
 
   processFile: (srcDir, destDir, relativePath) ->
     { dependenciesToCopy, depTree } = @processDependenciesToCopy(relativePath, srcDir, destDir)
@@ -228,35 +176,6 @@ class CopyDependenciesFilter extends CachingWriter
         depTree
       }
 
-  _listOfExternalDepsFromTree: (depTree) ->
-    depTree.listOfAllDependenciesForType @typesToCopy,
-      ignoreSelf: true
-      filter: @options.filterDep
-      formatValue: (v) ->
-        v.sourceRelativePath
-
-  _cachedResolve: (depPath) ->
-    return @perBuildCache.resolveCache[depPath] if @perBuildCache.resolveCache[depPath]?
-
-    @resolveStopwatch = Stopwatch().start() unless @resolveStopwatch?
-
-    [depName, depVersion] = @benderContext.extractProjectAndVersionFromPath(depPath)
-    extension = extractExtension(depPath)
-
-    resolvedDeps = @perBuildCache.resolveCache[depPath] = resolveDirAndPath depPath,
-      # filename: srcPath + '/' + depPath   # I don't think this is needed
-      extensionsToCheck: @dependencyCache.allPossibleCompiledExtensionsFor(extension)
-      allowMultipleResultsFromSameDirectory: true
-      allowRelativeLookupWithoutPrefix: false
-
-      # We know the exact loadPaths to look in since every dependency built
-      # is output to a single directory (and dep build output is mutually exclusive)
-      loadPaths: @loadPathsFor(depName, depVersion)
-
-    @resolveStopwatch.lap()
-
-    resolvedDeps
-
   getDestFilePath: (relativePath) ->
     if @options.extensions?.length > 0
       for ext in @options.extensions
@@ -275,13 +194,6 @@ class CopyDependenciesFilter extends CachingWriter
     # to ouput dir
     pathForDep = @options.loadPathsByProjectAndVersion()?[depName]?[depVersion]
     loadPaths = [pathForDep] if pathForDep?
-
-    # Then any other trees who's output might be needed
-    extraLoadTreesOutputPaths = (for extraTree in (@options.extraLoadTrees ? [])
-      extraTree.outputPath ? extraTree.tmpDestDir
-    ).filter (t) -> t?
-
-    loadPaths = loadPaths.concat(extraLoadTreesOutputPaths) if extraLoadTreesOutputPaths.length > 0
 
     # And then any other extra directories
     loadPaths = loadPaths.concat(@options.extraLoadPaths) if @options.extraLoadPaths?
