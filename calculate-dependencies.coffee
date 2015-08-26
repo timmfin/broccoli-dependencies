@@ -25,11 +25,11 @@ class CalculateDependenciesFilter extends NoOpFilter
     @multiResolver = new MultiResolver options
     @extensions = @multiResolver.allResolverExtensions()
 
-    if @options.includedDirs? and not Array.isArray(@options.includedDirs)
-      @options.includedDirs = [@options.includedDirs]
+    if @options.include? and not Array.isArray(@options.include)
+      @options.include = [@options.include]
 
-    if @options.excludedDirs? and not Array.isArray(@options.excludedDirs)
-      @options.excludedDirs = [@options.excludedDirs]
+    if @options.exclude? and not Array.isArray(@options.exclude)
+      @options.exclude = [@options.exclude]
 
   rebuild: ->
 
@@ -80,18 +80,18 @@ class CalculateDependenciesFilter extends NoOpFilter
     @hasRelevantExtension(relativePath) and @isIncludedPath(relativePath) and not @isExcludedPath(relativePath)
 
   isIncludedPath: (relativePath) ->
-    return true if not @options.includedDirs?
+    return true if not @options.include?
 
-    for includedDir in @options.includedDirs
-      return true if relativePath.indexOf(includedDir) is 0
+    for includePath in @options.include
+      return true if relativePath.indexOf(includePath) is 0
 
     false
 
   isExcludedPath: (relativePath) ->
-    return true if not @options.excludedDirs?
+    return false if not @options.exclude?
 
-    for excludeDir in @options.excludedDirs
-      return true if relativePath.indexOf(excludeDir) is 0
+    for excludePath in @options.exclude
+      return true if relativePath.indexOf(excludePath) is 0
 
     false
 
