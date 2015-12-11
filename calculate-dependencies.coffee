@@ -31,7 +31,7 @@ class CalculateDependenciesFilter extends NoOpFilter
     if @options.exclude? and not Array.isArray(@options.exclude)
       @options.exclude = [@options.exclude]
 
-  rebuild: ->
+  build: ->
 
     # Ensure that we re-build list and prefix caches, even though we are
     # saving/re-using the tree cache
@@ -51,8 +51,6 @@ class CalculateDependenciesFilter extends NoOpFilter
 
       @multiResolver.ensureAllDependenciesFoundWereProcessed @cachedFiles,
         prefixesToLimitTo: @options.dontAutoRecurseWithin
-
-      outputDir
 
   processFile: (srcDir, relativePath) ->
     @depTreesInTopLevelDir += 1

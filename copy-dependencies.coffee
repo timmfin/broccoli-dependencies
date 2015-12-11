@@ -46,8 +46,9 @@ class CopyDependenciesFilter extends CachingWriter
     result.then => @callPostBuildCallbackIfNecessary()
     result
 
-  updateCache: (srcDirs, destDir) ->
-    srcDir = srcDirs[0]
+  build: () ->
+    srcDir = this.inputPaths[0]
+    destDir = this.outputPath
 
     @allRelativePathsToCopy = Object.create(null)
     @sourceFilesToCopy = Object.create(null)
