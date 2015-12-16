@@ -1,7 +1,6 @@
 'use strict'
 
 fs             = require('fs')
-Set            = require('Set')
 RSVP           = require('RSVP')
 async          = require('async')
 mkdirp         = require('mkdirp')

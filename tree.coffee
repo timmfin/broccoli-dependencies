@@ -1,4 +1,3 @@
-Set = require('es6-native-set')  # Note a real memory-based (not string-based) set
 
 { extractExtension } = require('bender-broccoli-utils')
 
